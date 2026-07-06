@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<title>Feltjournal</title>
+<style>
+  :root{
+    --paper: #EFEDE6;
+    --ink: #232620;
+    --moss: #4B5D45;
+    --moss-dark: #34412F;
+    --clay: #A8562E;
+    --line: #C9C4B4;
+    --card: #F7F5EF;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); padding:0 0 60px 0;
+  }
+  @font-face{
+    font-family:'Source Serif 4';
+    src: local('Georgia');
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:32px 20px;}
+
+  header.top{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:6px;
+  }
+  header.top h1{
+    font-family:var(--serif); font-weight:600; font-size:28px; margin:0; letter-spacing:-0.01em;
+  }
+  header.top .sub{font-family:var(--mono); font-size:11px; color:var(--moss-dark); text-transform:uppercase; letter-spacing:0.08em;}
+
+  .datebar{
+    display:flex; align-items:center; gap:10px; margin:18px 0 28px 0;
+    font-family:var(--mono); font-size:13px;
+  }
+  .datebar button{
+    background:none; border:1px solid var(--line); color:var(--ink);
+    width:28px; height:28px; border-radius:3px; cursor:pointer; font-family:var(--mono);
+  }
+  .datebar button:hover{border-color:var(--moss);}
+  .datebar input[type=date]{
+    font-family:var(--mono); font-size:13px; border:1px solid var(--line);
+    background:var(--card); padding:5px 8px; border-radius:3px; color:var(--ink);
+  }
+  .datebar .status{margin-left:auto; font-size:11px; color:#8b8578;}
+  .datebar .dateDisplay{
+    font-family:var(--mono); font-size:13px; border:1px solid var(--line);
+    background:var(--card); padding:5px 10px; border-radius:3px; color:var(--ink);
+    cursor:pointer; user-select:none;
+  }
+  .datebar .dateDisplay:hover{border-color:var(--moss);}
+
+  section.block{
+    background:var(--card); border:1px solid var(--line); border-radius:4px;
+    padding:18px 20px; margin-bottom:16px;
+  }
+  section.block h2{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
+    color:var(--moss-dark); margin:0 0 14px 0; font-weight:600;
+  }
+
+  .tags{display:flex; flex-wrap:wrap; gap:8px;}
+  .tag{
+    font-family:var(--sans); font-size:13.5px; padding:7px 13px; border-radius:20px;
+    border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--ink);
+    transition:all .12s ease;
+  }
+  .tag.on{background:var(--moss); border-color:var(--moss); color:#fff;}
+  .tag:hover:not(.on){border-color:var(--moss);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media(max-width:520px){.grid2{grid-template-columns:1fr;}}
+
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block; font-size:12px; color:#6b6656; margin-bottom:5px; font-family:var(--sans);
+  }
+  .field .num-row{display:flex; align-items:center; gap:8px;}
+  .field input[type=number]{
+    width:100%; font-family:var(--mono); font-size:15px; border:1px solid var(--line);
+    background:#fff; padding:8px 10px; border-radius:3px; color:var(--ink);
+  }
+  .unit{font-family:var(--mono); font-size:11px; color:#8b8578; white-space:nowrap;}
+
+  .scale{display:flex; align-items:center; gap:10px;}
+  .scale input[type=range]{flex:1; accent-color:var(--clay);}
+  .scale .val{
+    font-family:var(--mono); font-size:18px; width:28px; text-align:center; color:var(--clay); font-weight:600;
+  }
+
+  .healthgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
+  @media(max-width:520px){.healthgrid{grid-template-columns:1fr;}}
+  .healthgrid .hint{font-size:10.5px; color:#a39d8c; margin-top:3px;}
+
+  .history{margin-top:26px;}
+  .history h2{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
+    color:var(--moss-dark); margin:0 0 10px 0;
+  }
+  table.log{width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono);}
+  table.log th, table.log td{
+    text-align:left; padding:7px 8px; border-bottom:1px solid var(--line);
+  }
+  table.log th{color:#8b8578; font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:0.05em;}
+  table.log tr:hover td{background:rgba(75,93,69,0.05);}
+  table.log .rowdate{cursor:pointer; color:var(--moss-dark); font-weight:600;}
+  table.log .rowdate:hover{text-decoration:underline;}
+  .empty{color:#a39d8c; font-size:13px; font-style:italic; padding:6px 0;}
+
+  .brainfog-dial{
+    display:flex; align-items:center; gap:16px; margin-top:4px;
+  }
+  .save-note{
+    font-family:var(--mono); font-size:10.5px; color:#a39d8c; text-align:right; margin-top:-8px; margin-bottom:14px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>Feltjournal</h1>
+    <div class="sub">helse · vaner · sensor</div>
+  </header>
+
+  <div class="datebar">
+    <button id="prevDay">‹</button>
+    <input type="date" id="dateInput" lang="nb-NO" style="display:none;">
+    <span class="dateDisplay" id="dateDisplay"></span>
+    <button id="nextDay">›</button>
+    <span class="status" id="saveStatus">klar</span>
+  </div>
+
+  <section class="block">
+    <h2>Vaner</h2>
+    <div class="tags" id="habitTags"></div>
+  </section>
+
+  <section class="block">
+    <h2>Kosttilskudd</h2>
+    <div class="tags" id="suppTags"></div>
+  </section>
+
+  <section class="block">
+    <h2>Kosthold</h2>
+    <div class="tags" id="dietTags"></div>
+  </section>
+
+  <section class="block">
+    <h2>Inntak</h2>
+    <div class="grid2">
+      <div class="field">
+        <label>Alkohol (enheter)</label>
+        <div class="num-row">
+          <input type="number" min="0" step="1" id="alkohol">
+          <span class="unit">enh.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Koffein (kopper)</label>
+        <div class="num-row">
+          <input type="number" min="0" step="1" id="koffein">
+          <span class="unit">kopper</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Tilstand (1–9)</h2>
+    <div id="scales"></div>
+  </section>
+
+  <section class="block">
+    <h2>Helsedata &amp; CO2</h2>
+    <div class="healthgrid" id="healthFields"></div>
+    <div class="hint">Tastes inn manuelt inntil Garmin-/Withings-/CO2-integrasjon er koblet til automatisk.</div>
+  </section>
+
+  <div class="save-note" id="saveNote">&nbsp;</div>
+
+  <div class="history">
+    <h2>Siste oppføringer</h2>
+    <div id="historyTable"></div>
+  </div>
+
+</div>
+
+<script>
+const HABITS = ["Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys/utendørs"];
+const SUPPS = ["Vitamin C","Vitamin D","Tran"];
+const DIET = ["Ultraprosessert mat","Sukker"];
+const SCALES = [
+  {key:"brainfog", label:"Brainfog"},
+  {key:"energi", label:"Energinivå"},
+  {key:"stress", label:"Stressnivå"}
+];
+const HEALTH = [
+  {key:"steg", label:"Steg", unit:"steg"},
+  {key:"sovn", label:"Søvn", unit:"timer"},
+  {key:"hrv", label:"HRV", unit:"ms"},
+  {key:"vekt", label:"Vekt", unit:"kg"},
+  {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm"},
+  {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
+];
+
+let currentDate = new Date().toISOString().slice(0,10);
+let currentEntry = emptyEntry();
+
+function emptyEntry(){
+  return {
+    habits:{}, supps:{}, diet:{},
+    alkohol:"", koffein:"",
+    scales:{brainfog:5, energi:5, stress:5},
+    health:{}
+  };
+}
+
+function pad(n){return n<10?'0'+n:n;}
+function shiftDate(dateStr, delta){
+  const d = new Date(dateStr+"T00:00:00");
+  d.setDate(d.getDate()+delta);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
+function formatNorwegian(dateStr){
+  const [y,m,d] = dateStr.split("-");
+  return `${d}.${m}.${y}`;
+}
+function updateDateDisplay(){
+  document.getElementById("dateDisplay").textContent = formatNorwegian(currentDate);
+}
+
+function renderTags(containerId, list, storeKey){
+  const c = document.getElementById(containerId);
+  c.innerHTML = "";
+  list.forEach(name=>{
+    const btn = document.createElement("button");
+    btn.className = "tag" + (currentEntry[storeKey][name] ? " on" : "");
+    btn.textContent = name;
+    btn.onclick = ()=>{
+      currentEntry[storeKey][name] = !currentEntry[storeKey][name];
+      btn.classList.toggle("on");
+      saveEntry();
+    };
+    c.appendChild(btn);
+  });
+}
+
+function renderScales(){
+  const c = document.getElementById("scales");
+  c.innerHTML = "";
+  SCALES.forEach(s=>{
+    const row = document.createElement("div");
+    row.className = "field";
+    row.innerHTML = `<label>${s.label}</label>
+      <div class="scale">
+        <input type="range" min="1" max="9" step="1" value="${currentEntry.scales[s.key] ?? 5}" data-key="${s.key}">
+        <span class="val">${currentEntry.scales[s.key] ?? 5}</span>
+      </div>`;
+    const input = row.querySelector("input");
+    const val = row.querySelector(".val");
+    input.oninput = ()=>{
+      val.textContent = input.value;
+      currentEntry.scales[s.key] = parseInt(input.value,10);
+    };
+    input.onchange = ()=>{
+      saveEntry();
+    };
+    c.appendChild(row);
+  });
+}
+
+function renderHealth(){
+  const c = document.getElementById("healthFields");
+  c.innerHTML = "";
+  HEALTH.forEach(h=>{
+    const f = document.createElement("div");
+    f.className = "field";
+    f.innerHTML = `<label>${h.label}</label>
+      <div class="num-row">
+        <input type="number" step="any" data-key="${h.key}" value="${currentEntry.health[h.key] ?? ''}">
+        <span class="unit">${h.unit}</span>
+      </div>`;
+    const input = f.querySelector("input");
+    input.oninput = ()=>{
+      currentEntry.health[h.key] = input.value;
+      saveEntry();
+    };
+    c.appendChild(f);
+  });
+}
+
+function renderIntake(){
+  document.getElementById("alkohol").value = currentEntry.alkohol;
+  document.getElementById("koffein").value = currentEntry.koffein;
+}
+
+document.getElementById("alkohol").oninput = (e)=>{ currentEntry.alkohol = e.target.value; saveEntry(); };
+document.getElementById("koffein").oninput = (e)=>{ currentEntry.koffein = e.target.value; saveEntry(); };
+
+function renderAll(){
+  renderTags("habitTags", HABITS, "habits");
+  renderTags("suppTags", SUPPS, "supps");
+  renderTags("dietTags", DIET, "diet");
+  renderScales();
+  renderHealth();
+  renderIntake();
+}
+
+let saveTimeout;
+function saveEntry(){
+  document.getElementById("saveStatus").textContent = "lagrer…";
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async ()=>{
+    try{
+      await window.storage.set("entry:"+currentDate, JSON.stringify(currentEntry));
+      document.getElementById("saveStatus").textContent = "lagret";
+      renderHistory();
+    }catch(err){
+      document.getElementById("saveStatus").textContent = "feil ved lagring";
+      console.error(err);
+    }
+  }, 400);
+}
+
+async function loadEntry(dateStr){
+  document.getElementById("saveStatus").textContent = "laster…";
+  try{
+    const res = await window.storage.get("entry:"+dateStr);
+    currentEntry = res ? JSON.parse(res.value) : emptyEntry();
+  }catch(err){
+    currentEntry = emptyEntry();
+  }
+  document.getElementById("saveStatus").textContent = "klar";
+  renderAll();
+}
+
+async function renderHistory(){
+  const el = document.getElementById("historyTable");
+  let keys;
+  try{
+    const res = await window.storage.list("entry:");
+    keys = res ? res.keys : [];
+  }catch(err){
+    keys = [];
+  }
+  if(!keys || keys.length===0){
+    el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>';
+    return;
+  }
+  keys.sort().reverse();
+  const rows = [];
+  for(const k of keys.slice(0,14)){
+    try{
+      const res = await window.storage.get(k);
+      const e = JSON.parse(res.value);
+      const date = k.replace("entry:","");
+      const habitCount = Object.values(e.habits||{}).filter(Boolean).length;
+      const bf = e.scales?.brainfog ?? "–";
+      const co2 = e.health?.co2_snitt || "–";
+      rows.push(`<tr>
+        <td class="rowdate" data-date="${date}">${date}</td>
+        <td>${habitCount}/${HABITS.length}</td>
+        <td>${bf}</td>
+        <td>${co2}</td>
+      </tr>`);
+    }catch(err){}
+  }
+  el.innerHTML = `<table class="log">
+    <thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead>
+    <tbody>${rows.join("")}</tbody>
+  </table>`;
+  el.querySelectorAll(".rowdate").forEach(td=>{
+    td.onclick = ()=>{
+      currentDate = td.dataset.date;
+      document.getElementById("dateInput").value = currentDate;
+      loadEntry(currentDate);
+    };
+  });
+}
+
+document.getElementById("dateInput").value = currentDate;
+updateDateDisplay();
+document.getElementById("dateInput").onchange = (e)=>{
+  currentDate = e.target.value;
+  updateDateDisplay();
+  loadEntry(currentDate);
+};
+document.getElementById("dateDisplay").onclick = ()=>{
+  const input = document.getElementById("dateInput");
+  if(input.showPicker){ input.showPicker(); } else { input.style.display="inline-block"; input.focus(); }
+};
+document.getElementById("prevDay").onclick = ()=>{
+  currentDate = shiftDate(currentDate, -1);
+  document.getElementById("dateInput").value = currentDate;
+  updateDateDisplay();
+  loadEntry(currentDate);
+};
+document.getElementById("nextDay").onclick = ()=>{
+  currentDate = shiftDate(currentDate, 1);
+  document.getElementById("dateInput").value = currentDate;
+  updateDateDisplay();
+  loadEntry(currentDate);
+};
+
+loadEntry(currentDate).then(renderHistory);
+</script>
+</body>
+</html>
