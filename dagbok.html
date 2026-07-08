@@ -455,16 +455,25 @@ let saveTimeout;
 function saveEntry(){
   document.getElementById("saveStatus").textContent = "lagrer…";
   clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(async ()=>{
-    try{
-      await window.storage.set("entry:"+currentDate, JSON.stringify(currentEntry));
-      document.getElementById("saveStatus").textContent = "lagret";
-      renderHistory();
-    }catch(err){
-      document.getElementById("saveStatus").textContent = "feil ved lagring";
-      console.error(err);
+  saveTimeout = setTimeout(()=> attemptSave(true), 400);
+}
+
+async function attemptSave(allowRetry){
+  try{
+    await window.storage.set("entry:"+currentDate, JSON.stringify(currentEntry));
+    document.getElementById("saveStatus").textContent = "lagret";
+    renderHistory();
+    if(googleAccessToken && spreadsheetId){
+      syncToSheet(currentDate, currentEntry);
     }
-  }, 400);
+  }catch(err){
+    console.error(err);
+    if(allowRetry){
+      setTimeout(()=> attemptSave(false), 1200);
+    } else {
+      document.getElementById("saveStatus").textContent = "feil ved lagring";
+    }
+  }
 }
 
 async function loadEntry(dateStr){
