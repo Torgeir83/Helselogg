@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Feltjournal</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -138,6 +139,11 @@
     <span class="status" id="saveStatus">klar</span>
   </div>
 
+  <div class="datebar" style="margin-top:-14px;">
+    <button id="googleConnectBtn" style="width:auto; padding:5px 12px; font-family:var(--sans); font-size:12px;">Koble til Google Sheets</button>
+    <span class="status" id="googleStatus">ikke tilkoblet</span>
+  </div>
+
   <section class="block">
     <h2>Vaner</h2>
     <div class="tags" id="habitTags"></div>
@@ -210,6 +216,121 @@ const HEALTH = [
   {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm"},
   {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
 ];
+
+const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
+const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+const SHEET_HEADERS = ["Dato","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys",
+  "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
+  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","CO2 snitt","CO2 maks"];
+
+let googleAccessToken = null;
+let tokenClient = null;
+let spreadsheetId = null;
+
+function initGoogleAuth(){
+  if(!window.google || !google.accounts){ setTimeout(initGoogleAuth, 300); return; }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SHEETS_SCOPE,
+    callback: async (resp)=>{
+      if(resp.error){
+        document.getElementById("googleStatus").textContent = "innlogging feilet";
+        return;
+      }
+      googleAccessToken = resp.access_token;
+      document.getElementById("googleStatus").textContent = "tilkoblet";
+      document.getElementById("googleConnectBtn").textContent = "Tilkoblet ✓";
+      await ensureSpreadsheet();
+    }
+  });
+}
+
+document.getElementById("googleConnectBtn").onclick = ()=>{
+  if(!tokenClient){ return; }
+  tokenClient.requestAccessToken();
+};
+
+async function ensureSpreadsheet(){
+  try{
+    const stored = await window.storage.get("sheet:spreadsheetId");
+    if(stored && stored.value){
+      spreadsheetId = stored.value;
+      return;
+    }
+  }catch(e){}
+  document.getElementById("googleStatus").textContent = "oppretter ark…";
+  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+    method:"POST",
+    headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
+    body: JSON.stringify({
+      properties:{ title:"Feltjournal-data" },
+      sheets:[{ properties:{ title:"Logg" }, data:[{ startRow:0, startColumn:0,
+        rowData:[{ values: SHEET_HEADERS.map(h=>({ userEnteredValue:{ stringValue:h } })) }]
+      }]}]
+    })
+  });
+  const data = await res.json();
+  spreadsheetId = data.spreadsheetId;
+  await window.storage.set("sheet:spreadsheetId", spreadsheetId);
+  document.getElementById("googleStatus").textContent = "tilkoblet";
+}
+
+function entryToRow(dateStr, entry){
+  const row = new Array(SHEET_HEADERS.length).fill("");
+  row[0] = dateStr;
+  HABITS.forEach((h,i)=>{ row[1+i] = entry.habits[h] ? "1" : ""; });
+  row[7] = entry.supps["Vitamin C"] ? "1" : "";
+  row[8] = entry.supps["Vitamin D"] ? "1" : "";
+  row[9] = entry.supps["Tran"] ? "1" : "";
+  row[10] = entry.diet["Ultraprosessert mat"] ? "1" : "";
+  row[11] = entry.diet["Sukker"] ? "1" : "";
+  row[12] = entry.alkohol || "";
+  row[13] = entry.koffein || "";
+  row[14] = entry.scales.brainfog ?? "";
+  row[15] = entry.scales.energi ?? "";
+  row[16] = entry.scales.stress ?? "";
+  row[17] = entry.health.steg || "";
+  row[18] = entry.health.sovn || "";
+  row[19] = entry.health.hrv || "";
+  row[20] = entry.health.vekt || "";
+  row[21] = entry.health.co2_snitt || "";
+  row[22] = entry.health.co2_max || "";
+  return row;
+}
+
+async function syncToSheet(dateStr, entry){
+  if(!googleAccessToken || !spreadsheetId) return;
+  try{
+    const getRes = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:A`,
+      { headers:{ "Authorization":"Bearer "+googleAccessToken } }
+    );
+    const getData = await getRes.json();
+    const rows = getData.values || [];
+    let rowIndex = rows.findIndex(r => r[0] === dateStr);
+    const row = entryToRow(dateStr, entry);
+    if(rowIndex > 0 || (rowIndex === 0 && rows[0] && rows[0][0] === dateStr)){
+      const sheetRowNum = rowIndex + 1;
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${String.fromCharCode(65+SHEET_HEADERS.length-1)}${sheetRowNum}?valueInputOption=USER_ENTERED`,
+        { method:"PUT", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
+          body: JSON.stringify({ values:[row] }) }
+      );
+    } else {
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        { method:"POST", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
+          body: JSON.stringify({ values:[row] }) }
+      );
+    }
+    document.getElementById("googleStatus").textContent = "synkronisert";
+  }catch(err){
+    console.error(err);
+    document.getElementById("googleStatus").textContent = "synk feilet";
+  }
+}
+
+initGoogleAuth();
 
 let currentDate = new Date().toISOString().slice(0,10);
 let currentEntry = emptyEntry();
