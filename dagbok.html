@@ -255,24 +255,40 @@ async function ensureSpreadsheet(){
     const stored = await window.storage.get("sheet:spreadsheetId");
     if(stored && stored.value){
       spreadsheetId = stored.value;
+      document.getElementById("googleStatus").textContent = "tilkoblet";
       return;
     }
-  }catch(e){}
+  }catch(e){
+    // no stored id yet, or storage lookup failed — fall through and create one
+  }
   document.getElementById("googleStatus").textContent = "oppretter ark…";
-  const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
-    method:"POST",
-    headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
-    body: JSON.stringify({
-      properties:{ title:"Feltjournal-data" },
-      sheets:[{ properties:{ title:"Logg" }, data:[{ startRow:0, startColumn:0,
-        rowData:[{ values: SHEET_HEADERS.map(h=>({ userEnteredValue:{ stringValue:h } })) }]
-      }]}]
-    })
-  });
-  const data = await res.json();
-  spreadsheetId = data.spreadsheetId;
-  await window.storage.set("sheet:spreadsheetId", spreadsheetId);
-  document.getElementById("googleStatus").textContent = "tilkoblet";
+  try{
+    const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+      method:"POST",
+      headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
+      body: JSON.stringify({
+        properties:{ title:"Feltjournal-data" },
+        sheets:[{ properties:{ title:"Logg" }, data:[{ startRow:0, startColumn:0,
+          rowData:[{ values: SHEET_HEADERS.map(h=>({ userEnteredValue:{ stringValue:h } })) }]
+        }]}]
+      })
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      throw new Error("Sheets API: "+res.status+" "+errText);
+    }
+    const data = await res.json();
+    spreadsheetId = data.spreadsheetId;
+    try{
+      await window.storage.set("sheet:spreadsheetId", spreadsheetId);
+    }catch(storeErr){
+      console.error("Kunne ikke lagre ark-ID lokalt, men arket er opprettet:", storeErr);
+    }
+    document.getElementById("googleStatus").textContent = "tilkoblet";
+  }catch(err){
+    console.error(err);
+    document.getElementById("googleStatus").textContent = "feil ved oppretting av ark";
+  }
 }
 
 function entryToRow(dateStr, entry){
