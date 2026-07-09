@@ -322,7 +322,14 @@ function entryToRow(dateStr, entry){
   return row;
 }
 
+let syncQueue = Promise.resolve();
+
 async function syncToSheet(dateStr, entry){
+  syncQueue = syncQueue.then(()=> doSyncToSheet(dateStr, entry));
+  return syncQueue;
+}
+
+async function doSyncToSheet(dateStr, entry){
   if(!googleAccessToken || !spreadsheetId) return;
   try{
     const getRes = await fetch(
