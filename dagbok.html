@@ -250,7 +250,15 @@ document.getElementById("googleConnectBtn").onclick = ()=>{
   tokenClient.requestAccessToken();
 };
 
+const KNOWN_SPREADSHEET_ID = "1rryn1XGXbQKkb47Zykin_EBl1au7xzrSoGcTrJm2sGM";
+
 async function ensureSpreadsheet(){
+  if(KNOWN_SPREADSHEET_ID){
+    spreadsheetId = KNOWN_SPREADSHEET_ID;
+    document.getElementById("googleStatus").textContent = "tilkoblet";
+    try{ await window.storage.set("sheet:spreadsheetId", spreadsheetId); }catch(e){}
+    return;
+  }
   try{
     const stored = await window.storage.get("sheet:spreadsheetId");
     if(stored && stored.value){
