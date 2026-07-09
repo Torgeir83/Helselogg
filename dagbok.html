@@ -467,19 +467,19 @@ function saveEntry(){
 }
 
 async function attemptSave(allowRetry){
+  if(googleAccessToken && spreadsheetId){
+    syncToSheet(currentDate, currentEntry);
+  }
   try{
     await window.storage.set("entry:"+currentDate, JSON.stringify(currentEntry));
     document.getElementById("saveStatus").textContent = "lagret";
     renderHistory();
-    if(googleAccessToken && spreadsheetId){
-      syncToSheet(currentDate, currentEntry);
-    }
   }catch(err){
     console.error(err);
     if(allowRetry){
       setTimeout(()=> attemptSave(false), 1200);
     } else {
-      document.getElementById("saveStatus").textContent = "feil ved lagring";
+      document.getElementById("saveStatus").textContent = "lokal lagring feilet (Sheets kan fortsatt fungere)";
     }
   }
 }
