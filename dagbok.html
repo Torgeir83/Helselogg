@@ -213,6 +213,7 @@ const HEALTH = [
   {key:"sovn", label:"Søvn", unit:"timer"},
   {key:"hrv", label:"HRV", unit:"ms"},
   {key:"vekt", label:"Vekt", unit:"kg"},
+  {key:"kal_brukt", label:"Kalorier brukt (Garmin)", unit:"kcal"},
   {key:"kal_balanse", label:"Kaloribalanse (Yazio)", unit:"kcal, +/-"},
   {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm"},
   {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
@@ -222,7 +223,7 @@ const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.goo
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys",
   "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
-  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kaloribalanse","CO2 snitt","CO2 maks"];
+  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kalorier brukt","Kaloribalanse","CO2 snitt","CO2 maks"];
 
 const NORSKE_DAGER = ["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
 function norskDag(dateStr){
@@ -325,9 +326,10 @@ function entryToRow(dateStr, entry){
   row[19] = entry.health.sovn || "";
   row[20] = entry.health.hrv || "";
   row[21] = entry.health.vekt || "";
-  row[22] = entry.health.kal_balanse || "";
-  row[23] = entry.health.co2_snitt || "";
-  row[24] = entry.health.co2_max || "";
+  row[22] = entry.health.kal_brukt || "";
+  row[23] = entry.health.kal_balanse || "";
+  row[24] = entry.health.co2_snitt || "";
+  row[25] = entry.health.co2_max || "";
   return row;
 }
 
