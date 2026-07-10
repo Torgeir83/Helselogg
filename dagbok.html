@@ -308,7 +308,7 @@ async function ensureSpreadsheet(){
 
 function entryToRow(dateStr, entry){
   const row = new Array(SHEET_HEADERS.length).fill("");
-  row[0] = dateStr;
+  row[0] = "'"+dateStr;
   row[1] = norskDag(dateStr);
   HABITS.forEach((h,i)=>{ row[2+i] = entry.habits[h] ? "1" : ""; });
   row[8] = entry.supps["Vitamin C"] ? "1" : "";
