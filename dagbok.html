@@ -213,15 +213,22 @@ const HEALTH = [
   {key:"sovn", label:"Søvn", unit:"timer"},
   {key:"hrv", label:"HRV", unit:"ms"},
   {key:"vekt", label:"Vekt", unit:"kg"},
+  {key:"kal_balanse", label:"Kaloribalanse (Yazio)", unit:"kcal, +/-"},
   {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm"},
   {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
 ];
 
 const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
-const SHEET_HEADERS = ["Dato","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys",
+const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys",
   "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
-  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","CO2 snitt","CO2 maks"];
+  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kaloribalanse","CO2 snitt","CO2 maks"];
+
+const NORSKE_DAGER = ["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
+function norskDag(dateStr){
+  const d = new Date(dateStr+"T00:00:00");
+  return NORSKE_DAGER[d.getDay()];
+}
 
 let googleAccessToken = null;
 let tokenClient = null;
@@ -302,23 +309,25 @@ async function ensureSpreadsheet(){
 function entryToRow(dateStr, entry){
   const row = new Array(SHEET_HEADERS.length).fill("");
   row[0] = dateStr;
-  HABITS.forEach((h,i)=>{ row[1+i] = entry.habits[h] ? "1" : ""; });
-  row[7] = entry.supps["Vitamin C"] ? "1" : "";
-  row[8] = entry.supps["Vitamin D"] ? "1" : "";
-  row[9] = entry.supps["Tran"] ? "1" : "";
-  row[10] = entry.diet["Ultraprosessert mat"] ? "1" : "";
-  row[11] = entry.diet["Sukker"] ? "1" : "";
-  row[12] = entry.alkohol || "";
-  row[13] = entry.koffein || "";
-  row[14] = entry.scales.brainfog ?? "";
-  row[15] = entry.scales.energi ?? "";
-  row[16] = entry.scales.stress ?? "";
-  row[17] = entry.health.steg || "";
-  row[18] = entry.health.sovn || "";
-  row[19] = entry.health.hrv || "";
-  row[20] = entry.health.vekt || "";
-  row[21] = entry.health.co2_snitt || "";
-  row[22] = entry.health.co2_max || "";
+  row[1] = norskDag(dateStr);
+  HABITS.forEach((h,i)=>{ row[2+i] = entry.habits[h] ? "1" : ""; });
+  row[8] = entry.supps["Vitamin C"] ? "1" : "";
+  row[9] = entry.supps["Vitamin D"] ? "1" : "";
+  row[10] = entry.supps["Tran"] ? "1" : "";
+  row[11] = entry.diet["Ultraprosessert mat"] ? "1" : "";
+  row[12] = entry.diet["Sukker"] ? "1" : "";
+  row[13] = entry.alkohol || "";
+  row[14] = entry.koffein || "";
+  row[15] = entry.scales.brainfog ?? "";
+  row[16] = entry.scales.energi ?? "";
+  row[17] = entry.scales.stress ?? "";
+  row[18] = entry.health.steg || "";
+  row[19] = entry.health.sovn || "";
+  row[20] = entry.health.hrv || "";
+  row[21] = entry.health.vekt || "";
+  row[22] = entry.health.kal_balanse || "";
+  row[23] = entry.health.co2_snitt || "";
+  row[24] = entry.health.co2_max || "";
   return row;
 }
 
