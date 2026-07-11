@@ -254,7 +254,7 @@ function norskDag(dateStr){
 let googleAccessToken = null;
 let tokenClient = null;
 let spreadsheetId = null;
-let isPageLoading = false; // Sperreflagg under skifte av datoer
+let isPageLoading = false; 
 let saveTimeout = null;
 
 let currentDate = new Date().toISOString().slice(0,10);
@@ -394,7 +394,7 @@ async function fetchExistingDataFromSheet(dateStr) {
 }
 
 async function fetchAllHealthData(dateStr) {
-  if (!googleAccessToken || isPageLoading) return;
+  if (!googleAccessToken) return;
   
   const targetDateAtCall = dateStr;
   const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
@@ -405,19 +405,16 @@ async function fetchAllHealthData(dateStr) {
   let found = false;
 
   try {
-    // Steg
     const sRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`, { headers });
     if (sRes.ok) {
       const d = await sRes.json(); let s = 0; d.point?.forEach(p => s += p.value?.[0]?.intVal || 0);
       if (s > 0) { newHealthData.steg = s; found = true; }
     }
-    // Kalorier
     const cRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`, { headers });
     if (cRes.ok) {
       const d = await cRes.json(); let c = 0; d.point?.forEach(p => c += p.value?.[0]?.fpVal || 0);
       if (c > 0) { newHealthData.kal_brukt = Math.round(c); found = true; }
     }
-    // Vekt
     const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`, { headers });
     if (wRes.ok) {
       const d = await wRes.json();
@@ -426,15 +423,13 @@ async function fetchAllHealthData(dateStr) {
         if (w > 0) { newHealthData.vekt = Math.round(w * 10) / 10; found = true; }
       }
     }
-    // Søvn
     const slRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`, { headers });
     if (slRes.ok) {
       const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000);
       if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; }
     }
 
-    // Lås oppdateringen til nøyaktig den datoen kallet ble gjort for
-    if (found && targetDateAtCall === currentDate && !isPageLoading) {
+    if (found && targetDateAtCall === currentDate) {
       Object.assign(currentEntry.health, newHealthData);
       renderHealth();
       await doSyncToSheet(currentDate, currentEntry);
@@ -613,13 +608,11 @@ async function handleDateChange(newDate) {
   isPageLoading = true;
   document.getElementById("saveStatus").textContent = "bytter dag…";
   
-  // 1. Lagre gårsdagens tilstand HELT synkront med øyeblikksbilde før vi flytter pekeren
   const oldDate = currentDate;
   const oldEntry = JSON.parse(JSON.stringify(currentEntry));
   if(googleAccessToken && spreadsheetId) await doSyncToSheet(oldDate, oldEntry);
   try { await window.storage.set("entry:" + oldDate, JSON.stringify(oldEntry)); } catch(e){}
   
-  // 2. Flytt pekeren til ny dato og hent data
   currentDate = newDate;
   document.getElementById("dateInput").value = currentDate;
   updateDateDisplay();
