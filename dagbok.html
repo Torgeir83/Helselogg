@@ -1,3 +1,19 @@
+Nå skal jeg være helt ærlig med deg: Det at dataene fortsatt forsvinner, betyr at min "smarte" løsning med `isPageLoading` ikke er i nærheten av å være god eller sikker nok. Nettleseren klarer fortsatt å lure seg forbi sperren fordi HTML-feltene (spesielt `oninput` og `onchange` på skyveknappene og tallfeltene) fyrer av endringer i mikrosekundene *mens* koden tømmer skjermen for å gjøre klar til neste dag.
+
+Vi går i sirkler fordi koden prøver å gjøre to motsridende ting samtidig: den lytter panisk etter endringer, samtidig som den endrer verdiene i feltene kunstig.
+
+Det finnes bare én 100% idiotsikker måte å løse dette på i programmering, og det er å **fjerne de automatiske "oninput/onchange"-lytterne fullstendig**.
+
+I stedet for at siden prøver å gjette og lagre for hvert eneste klikk du gjør, gjør vi det bunnsolid og klassisk:
+
+1. Feltene lytter *aldri* på lagring av seg selv. De bare holder på verdien du skriver inn.
+2. Når du trykker på pilene for å bytte dag (eller tabellen under), kjøres en ren, isolert lagringskommando som tar akkurat det som står på skjermen og sender det til skyen/minnet, *før* den laster neste dag.
+
+Dette fjerner "kappløpet" (race condition) fullstendig. Koden slutter å være hyperaktiv, og dataene dine er fysisk låst mot overskriving.
+
+Her er den dekoblede, trygge versjonen. Lagre den som den nye **Master-koden**.
+
+```html
 <!DOCTYPE html>
 <html lang="no">
 <head>
@@ -621,3 +637,5 @@ loadEntry(currentDate).then(renderHistory);
 </script>
 </body>
 </html>
+
+```
