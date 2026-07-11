@@ -217,7 +217,6 @@ const HEALTH = [
 ];
 
 const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
-// Be om tilgang til Sheets samt de nødvendige lese-scope for trenings-/helsedata
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets " +
                      "https://www.googleapis.com/auth/fitness.activity.read " +
                      "https://www.googleapis.com/auth/fitness.body.read " +
@@ -307,93 +306,83 @@ async function ensureSpreadsheet(){
   }
 }
 
-// HENTER AUTOMATISKE HELSEDATA FRA GOOGLE FITNESS REST API
 async function fetchAllHealthData(dateStr) {
   if (!googleAccessToken) return;
   
-  const startOfDay = new Date(dateStr + "T00:00:00");
-  const endOfDay = new Date(dateStr + "T23:59:59");
+  const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
+  const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
   
-  const startTimeMillis = startOfDay.getTime();
-  const endTimeMillis = endOfDay.getTime();
-  
-  // Felles forespørsel-struktur for aggregering
-  const makeBody = (dataTypeName) => JSON.stringify({
-    aggregateBy: [{ dataTypeName: dataTypeName }],
-    bucketByTime: { durationMillis: 86400000 },
-    startTimeMillis: startTimeMillis,
-    endTimeMillis: endTimeMillis
-  });
-  
-  const headers = {
-    "Authorization": "Bearer " + googleAccessToken,
-    "Content-Type": "application/json"
-  };
+  const headers = { "Authorization": "Bearer " + googleAccessToken };
 
   try {
-    // 1. Hent Steg (com.google.step_count.delta)
-    const stepRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
-      method: "POST", headers: headers, body: makeBody("com.google.step_count.delta")
-    });
+    // 1. STEG
+    const stepUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`;
+    const stepRes = await fetch(stepUrl, { headers: headers });
     if (stepRes.ok) {
       const data = await stepRes.json();
-      const steps = data.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.intVal || 0;
-      if (steps > 0) {
-        currentEntry.health.steg = steps;
-        document.querySelector('input[data-key="steg"]').value = steps;
+      let totalSteps = 0;
+      data.point?.forEach(p => { totalSteps += p.value?.[0]?.intVal || 0; });
+      if (totalSteps > 0) {
+        currentEntry.health.steg = totalSteps;
+        const input = document.querySelector('input[data-key="steg"]');
+        if (input) input.value = totalSteps;
       }
     }
 
-    // 2. Hent Kalorier brukt (com.google.calories.expended)
-    const calRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
-      method: "POST", headers: headers, body: makeBody("com.google.calories.expended")
-    });
+    // 2. KALORIER BRUKT
+    const calUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`;
+    const calRes = await fetch(calUrl, { headers: headers });
     if (calRes.ok) {
       const data = await calRes.json();
-      const cals = data.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-      if (cals > 0) {
-        const fixedCals = Math.round(cals);
+      let totalCals = 0;
+      data.point?.forEach(p => { totalCals += p.value?.[0]?.fpVal || 0; });
+      if (totalCals > 0) {
+        const fixedCals = Math.round(totalCals);
         currentEntry.health.kal_brukt = fixedCals;
-        document.querySelector('input[data-key="kal_brukt"]').value = fixedCals;
+        const input = document.querySelector('input[data-key="kal_brukt"]');
+        if (input) input.value = fixedCals;
       }
     }
 
-    // 3. Hent Vekt (com.google.weight)
-    const weightRes = await fetch("https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate", {
-      method: "POST", headers: headers, body: makeBody("com.google.weight")
-    });
+    // 3. VEKT
+    const weightUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`;
+    const weightRes = await fetch(weightUrl, { headers: headers });
     if (weightRes.ok) {
       const data = await weightRes.json();
-      const weight = data.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-      if (weight > 0) {
-        const fixedWeight = Math.round(weight * 10) / 10;
-        currentEntry.health.vekt = fixedWeight;
-        document.querySelector('input[data-key="vekt"]').value = fixedWeight;
+      if (data.point && data.point.length > 0) {
+        const lastPoint = data.point[data.point.length - 1];
+        const weight = lastPoint.value?.[0]?.fpVal || 0;
+        if (weight > 0) {
+          const fixedWeight = Math.round(weight * 10) / 10;
+          currentEntry.health.vekt = fixedWeight;
+          const input = document.querySelector('input[data-key="vekt"]');
+          if (input) input.value = fixedWeight;
+        }
       }
     }
 
-    // 4. Hent Søvn (com.google.sleep.segment)
-    // Søvn krever ofte tidsrom-oppslag i stedet for ren aggregering fordi det er tidssegmenter
-    const sleepRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startTimeMillis}000000-${endTimeMillis}000000`, {
-      method: "GET", headers: { "Authorization": "Bearer " + googleAccessToken }
-    });
+    // 4. SØVN
+    const sleepUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`;
+    const sleepRes = await fetch(sleepUrl, { headers: headers });
     if (sleepRes.ok) {
       const data = await sleepRes.json();
       let totalSleepMillis = 0;
       data.point?.forEach(p => {
-        const duration = (parseInt(p.endTimeNanos) - parseInt(p.startTimeNanos)) / 1000000;
-        totalSleepMillis += duration;
+        const startMs = Number(BigInt(p.startTimeNanos) / 1000000n);
+        const endMs = Number(BigInt(p.endTimeNanos) / 1000000n);
+        totalSleepMillis += (endMs - startMs);
       });
       if (totalSleepMillis > 0) {
         const sleepHours = Math.round((totalSleepMillis / (1000 * 60 * 60)) * 10) / 10;
         currentEntry.health.sovn = sleepHours;
-        document.querySelector('input[data-key="sovn"]').value = sleepHours;
+        const input = document.querySelector('input[data-key="sovn"]');
+        if (input) input.value = sleepHours;
       }
     }
     
     saveEntry();
   } catch (err) {
-    console.error("Feil ved henting av helsedata:", err);
+    console.error("Feil under henting av helsedata:", err);
   }
 }
 
@@ -616,7 +605,6 @@ async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "klar";
   renderAll();
   
-  // Hver gang en ny dato lastes, forsøk å hente dagens helsedata automatisk
   if (googleAccessToken) {
     await fetchAllHealthData(dateStr);
   }
