@@ -254,7 +254,7 @@ function norskDag(dateStr){
 let googleAccessToken = null;
 let tokenClient = null;
 let spreadsheetId = null;
-let isInitialLoadingFromSheet = false; // Hindrer autosave under innlasting fra Sheet
+let isInitialLoadingFromSheet = false;
 
 function setGoogleStatus(text, isError=false) {
   const el = document.getElementById("googleStatus");
@@ -289,7 +289,7 @@ function initGoogleAuth(){
       document.getElementById("fetchHealthBtn").style.display = "inline-block";
       showDebugError(null);
       await ensureSpreadsheet();
-      await loadEntry(currentDate); // Laster inn data på nytt med Google-tilgang aktiv
+      await loadEntry(currentDate);
     }
   });
 }
@@ -344,7 +344,6 @@ async function ensureSpreadsheet(){
   }
 }
 
-// NY FUNKSJON: Henter lagrede data direkte fra Google Sheets
 async function fetchExistingDataFromSheet(dateStr) {
   if (!googleAccessToken || !spreadsheetId) return null;
   
@@ -356,42 +355,31 @@ async function fetchExistingDataFromSheet(dateStr) {
     
     const data = await res.json();
     const rows = data.values || [];
-    if (rows.length <= 1) return null; // Bare header eller tomt
+    if (rows.length <= 1) return null;
     
-    // Finn raden som matcher datoen (kolonne A)
     const foundRow = rows.find(r => r[0] === dateStr);
     if (!foundRow) return null;
     
-    // Bygg opp et entry-objekt basert på det som ble funnet i raden
     const entry = emptyEntry();
-    
     const getVal = (headerName) => {
       const idx = SHEET_HEADERS.indexOf(headerName);
       return (idx !== -1 && foundRow[idx] !== undefined) ? foundRow[idx] : "";
     };
     
-    // Populer vaner
     HABITS.forEach(h => {
       const val = getVal(h === "Dagslys/utendørs" ? "Dagslys" : h);
       entry.habits[h] = val === "1";
     });
-    
-    // Populer kosttilskudd
     SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
-    
-    // Populer diett
     DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
     
-    // Inntak
     entry.alkohol = getVal("Alkohol");
     entry.koffein = getVal("Koffein");
     
-    // Skalaer
     entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
     entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
     entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
     
-    // Helsedata & CO2
     entry.health.steg = getVal("Steg") !== "" ? Number(getVal("Steg")) : "";
     entry.health.sovn = getVal("Søvn") !== "" ? Number(getVal("Søvn")) : "";
     entry.health.hrv = getVal("HRV") !== "" ? Number(getVal("HRV")) : "";
@@ -419,7 +407,6 @@ async function fetchAllHealthData(dateStr) {
   let foundAnyData = false;
 
   try {
-    // 1. STEG
     const stepUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`;
     const stepRes = await fetch(stepUrl, { headers: headers });
     if (stepRes.ok) {
@@ -432,11 +419,8 @@ async function fetchAllHealthData(dateStr) {
         if (input) input.value = totalSteps;
         foundAnyData = true;
       }
-    } else {
-      apiErrors.push("Steg API feil (" + stepRes.status + ")");
-    }
+    } else { apiErrors.push("Steg API feil (" + stepRes.status + ")"); }
 
-    // 2. KALORIER BRUKT
     const calUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`;
     const calRes = await fetch(calUrl, { headers: headers });
     if (calRes.ok) {
@@ -452,7 +436,6 @@ async function fetchAllHealthData(dateStr) {
       }
     }
 
-    // 3. VEKT
     const weightUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`;
     const weightRes = await fetch(weightUrl, { headers: headers });
     if (weightRes.ok) {
@@ -470,7 +453,6 @@ async function fetchAllHealthData(dateStr) {
       }
     }
 
-    // 4. SØVN
     const sleepUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`;
     const sleepRes = await fetch(sleepUrl, { headers: headers });
     if (sleepRes.ok) {
@@ -497,7 +479,7 @@ async function fetchAllHealthData(dateStr) {
     }
     
     setGoogleStatus("tilkoblet ✓");
-    saveEntry();
+    forceSaveImmediately();
   } catch (err) {
     console.error(err);
     showDebugError("Systemfeil under henting: " + err.message);
@@ -622,10 +604,20 @@ function renderAll(){ renderTags("habitTags", HABITS, "habits"); renderTags("sup
 
 let saveTimeout;
 function saveEntry(){ 
-  if (isInitialLoadingFromSheet) return; // Ikke overskriv noe under innlasting
+  if (isInitialLoadingFromSheet) return;
   document.getElementById("saveStatus").textContent = "lagrer…"; 
   clearTimeout(saveTimeout); 
   saveTimeout = setTimeout(()=> attemptSave(true), 400); 
+}
+
+// Tvinger umiddelbar lagring uten timeout (brukes ved datobytte)
+function forceSaveImmediately() {
+  if (isInitialLoadingFromSheet) return;
+  clearTimeout(saveTimeout);
+  if (googleAccessToken && spreadsheetId) syncToSheet(currentDate, currentEntry);
+  try {
+    window.storage.set("entry:" + currentDate, JSON.stringify(currentEntry));
+  } catch(e) {}
 }
 
 async function attemptSave(allowRetry){
@@ -638,9 +630,8 @@ async function attemptSave(allowRetry){
 
 async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "laster…";
-  isInitialLoadingFromSheet = true; // Setter sperre
+  isInitialLoadingFromSheet = true;
   
-  // 1. Sjekk først om det finnes data lagret i Google Sheets fra før
   let dataFromSheet = null;
   if (googleAccessToken && spreadsheetId) {
     dataFromSheet = await fetchExistingDataFromSheet(dateStr);
@@ -650,7 +641,6 @@ async function loadEntry(dateStr) {
     currentEntry = dataFromSheet;
     document.getElementById("saveStatus").textContent = "hentet fra sky";
   } else {
-    // 2. Hvis tomt i skyen, fall tilbake til lokal storage (eller blankt)
     try { 
       const res = await window.storage.get("entry:"+dateStr); 
       currentEntry = res ? JSON.parse(res.value) : emptyEntry(); 
@@ -661,12 +651,23 @@ async function loadEntry(dateStr) {
   }
   
   renderAll();
-  isInitialLoadingFromSheet = false; // Åpner for lagring igjen
+  isInitialLoadingFromSheet = false;
   
-  // Hvis det var helt tomt i arket for denne dagen, gjør et automatisk API-søk etter helsedata
   if (!dataFromSheet && googleAccessToken) {
     await fetchAllHealthData(dateStr);
   }
+}
+
+async function handleDateChange(newDate) {
+  // 1. Tving frem lagring av NÅVÆRENDE data på NÅVÆRENDE dato før vi bytter
+  forceSaveImmediately();
+  
+  // 2. Bytt dato og last inn de nye dataene
+  currentDate = newDate;
+  document.getElementById("dateInput").value = currentDate;
+  updateDateDisplay();
+  await loadEntry(currentDate);
+  await renderHistory();
 }
 
 async function renderHistory(){
@@ -681,14 +682,18 @@ async function renderHistory(){
     }catch(e){}
   }
   el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
-  el.querySelectorAll(".rowdate").forEach(td=>{ td.onclick = ()=>{ currentDate = td.dataset.date; document.getElementById("dateInput").value = currentDate; updateDateDisplay(); loadEntry(currentDate); }; });
+  el.querySelectorAll(".rowdate").forEach(td=>{
+    td.onclick = async ()=>{
+      await handleDateChange(td.dataset.date);
+    };
+  });
 }
 
 document.getElementById("dateInput").value = currentDate; updateDateDisplay();
-document.getElementById("dateInput").onchange = (e)=>{ currentDate = e.target.value; updateDateDisplay(); loadEntry(currentDate); };
+document.getElementById("dateInput").onchange = async (e)=>{ await handleDateChange(e.target.value); };
 document.getElementById("dateDisplay").onclick = ()=>{ const input = document.getElementById("dateInput"); if(input.showPicker){ input.showPicker(); } else { input.style.display="inline-block"; input.focus(); } };
-document.getElementById("prevDay").onclick = ()=>{ currentDate = shiftDate(currentDate, -1); document.getElementById("dateInput").value = currentDate; updateDateDisplay(); loadEntry(currentDate); };
-document.getElementById("nextDay").onclick = ()=>{ currentDate = shiftDate(currentDate, 1); document.getElementById("dateInput").value = currentDate; updateDateDisplay(); loadEntry(currentDate); };
+document.getElementById("prevDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, -1)); };
+document.getElementById("nextDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, 1)); };
 
 loadEntry(currentDate).then(renderHistory);
 </script>
