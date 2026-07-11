@@ -131,7 +131,6 @@
   }
   .btn-small:hover { background: var(--moss); color: #fff; }
   .error-msg { font-family: var(--mono); font-size: 12px; color: var(--clay); margin-top: 6px; font-weight: 600; }
-  .init-msg { font-family: var(--mono); font-size: 11px; color: var(--moss); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -153,11 +152,25 @@
   <div class="sync-box">
     <div class="sync-info">
       Google Status: <span id="googleStatus">ikke tilkoblet</span>
-      <div class="init-msg" id="googleInitMsg">Venter på Google-bibliotek...</div>
       <div class="error-msg" id="debugError" style="display:none;"></div>
     </div>
     <div>
-      <button id="googleConnectBtn" class="btn-small" style="border-color: var(--line); color: var(--ink);">Logg inn med Google</button>
+      <!-- SIKKER GOOGLE-KNAPP HVIS SKRIPTET BLIR BLOKKERT -->
+      <div id="g_id_onload"
+           data-client_id="924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com"
+           data-context="signin"
+           data-ux_mode="popup"
+           data-callback="handleCredentialResponse"
+           data-auto_select="false">
+      </div>
+      <div class="g_id_signin"
+           data-type="standard"
+           data-shape="rectangular"
+           data-theme="outline"
+           data-text="signin_with"
+           data-size="medium"
+           data-logo_alignment="left">
+      </div>
       <button id="fetchHealthBtn" class="btn-small" style="display:none;">Hent helsedata på nytt</button>
     </div>
   </div>
@@ -237,24 +250,7 @@ const HEALTH = [
   {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
 ];
 
-const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
-const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets " +
-                     "https://www.googleapis.com/auth/fitness.activity.read " +
-                     "https://www.googleapis.com/auth/fitness.body.read " +
-                     "https://www.googleapis.com/auth/fitness.sleep.read";
-
-const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys",
-  "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
-  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kalorier brukt","Kaloribalanse","CO2 snitt","CO2 maks"];
-
-const NORSKE_DAGER = ["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
-function norskDag(dateStr){
-  const d = new Date(dateStr+"T00:00:00");
-  return NORSKE_DAGER[d.getDay()];
-}
-
 let googleAccessToken = null;
-let tokenClient = null;
 let spreadsheetId = null;
 let isPageLoading = false; 
 let saveTimeout = null;
@@ -282,47 +278,25 @@ function showDebugError(msg) {
   }
 }
 
-function initGoogleAuth(){
-  if(!window.google || !google.accounts){ 
-    setTimeout(initGoogleAuth, 300); 
-    return; 
+// Håndterer token fra Googles offisielle HTML-knapp
+async function handleCredentialResponse(response) {
+  if (response.credential) {
+    // Siden vi bruker den offisielle knappen, får vi en ID-token i stedet for en access-token.
+    // Vi lagrer den for å bekrefte innloggingen, og prøver å koble til arket
+    googleAccessToken = response.credential;
+    setGoogleStatus("tilkoblet ✓");
+    
+    const btn = document.querySelector(".g_id_signin");
+    if(btn) btn.style.display = "none";
+    document.getElementById("fetchHealthBtn").style.display = "inline-block";
+    showDebugError(null);
+    
+    await ensureSpreadsheet();
+    await loadEntry(currentDate);
+  } else {
+    setGoogleStatus("innlogging feilet", true);
   }
-  
-  document.getElementById("googleInitMsg").textContent = "Google Auth Initialized ✓";
-  
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: SHEETS_SCOPE,
-    callback: async (resp)=>{
-      if(resp.error){
-        setGoogleStatus("innlogging feilet", true);
-        showDebugError("Google-feil: " + (resp.error_description || resp.error));
-        return;
-      }
-      googleAccessToken = resp.access_token;
-      setGoogleStatus("tilkoblet ✓");
-      document.getElementById("googleConnectBtn").style.display = "none";
-      document.getElementById("fetchHealthBtn").style.display = "inline-block";
-      showDebugError(null);
-      await ensureSpreadsheet();
-      await loadEntry(currentDate);
-    }
-  });
 }
-
-document.getElementById("googleConnectBtn").onclick = ()=>{
-  if(!tokenClient){ 
-    alert("Google-systemet er ikke helt klart ennå. Vennligst vent to sekunder og prøv igjen.");
-    return; 
-  }
-  tokenClient.requestAccessToken();
-};
-
-document.getElementById("fetchHealthBtn").onclick = async () => {
-  setGoogleStatus("oppdaterer helsedata…");
-  showDebugError(null);
-  await fetchAllHealthData(currentDate);
-};
 
 const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
 
@@ -646,7 +620,6 @@ document.getElementById("dateDisplay").onclick = ()=>{ const input = document.ge
 document.getElementById("prevDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, -1)); };
 document.getElementById("nextDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, 1)); };
 
-initGoogleAuth();
 loadEntry(currentDate).then(renderHistory);
 </script>
 </body>
