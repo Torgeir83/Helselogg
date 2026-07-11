@@ -274,8 +274,9 @@ async function ensureSpreadsheet(){
       document.getElementById("googleStatus").textContent = "tilkoblet";
       return;
     }
-  }catch(e){}
-  
+  }catch(e){
+    // no stored id yet, or storage lookup failed — fall through and create one
+  }
   document.getElementById("googleStatus").textContent = "oppretter ark…";
   try{
     const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
@@ -308,40 +309,27 @@ async function ensureSpreadsheet(){
 
 function entryToRow(dateStr, entry){
   const row = new Array(SHEET_HEADERS.length).fill("");
-  
-  row[SHEET_HEADERS.indexOf("Dato")] = "'" + dateStr;
-  row[SHEET_HEADERS.indexOf("Dag")] = norskDag(dateStr);
-  
-  row[SHEET_HEADERS.indexOf("Trene styrke")] = entry.habits["Trene styrke"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Trene kardio")] = entry.habits["Trene kardio"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Lese")] = entry.habits["Lese"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Gå til jobb")] = entry.habits["Gå til jobb"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Pornobruk")] = entry.habits["Pornobruk"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Dagslys")] = entry.habits["Dagslys/utendørs"] ? "1" : "0";
-  
-  row[SHEET_HEADERS.indexOf("Vitamin C")] = entry.supps["Vitamin C"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Vitamin D")] = entry.supps["Vitamin D"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Tran")] = entry.supps["Tran"] ? "1" : "0";
-  
-  row[SHEET_HEADERS.indexOf("Ultraprosessert mat")] = entry.diet["Ultraprosessert mat"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Sukker")] = entry.diet["Sukker"] ? "1" : "0";
-  
-  row[SHEET_HEADERS.indexOf("Alkohol")] = entry.alkohol !== "" && entry.alkohol != null ? entry.alkohol : "0";
-  row[SHEET_HEADERS.indexOf("Koffein")] = entry.koffein !== "" && entry.koffein != null ? entry.koffein : "0";
-  
-  row[SHEET_HEADERS.indexOf("Brainfog")] = entry.scales.brainfog ?? "";
-  row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
-  row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
-  
-  row[SHEET_HEADERS.indexOf("Steg")] = entry.health.steg || "";
-  row[SHEET_HEADERS.indexOf("Søvn")] = entry.health.sovn || "";
-  row[SHEET_HEADERS.indexOf("HRV")] = entry.health.hrv || "";
-  row[SHEET_HEADERS.indexOf("Vekt")] = entry.health.vekt || "";
-  row[SHEET_HEADERS.indexOf("Kalorier brukt")] = entry.health.kal_brukt || "";
-  row[SHEET_HEADERS.indexOf("Kaloribalanse")] = entry.health.kal_balanse || "";
-  row[SHEET_HEADERS.indexOf("CO2 snitt")] = entry.health.co2_snitt || "";
-  row[SHEET_HEADERS.indexOf("CO2 maks")] = entry.health.co2_max || "";
-  
+  row[0] = "'"+dateStr;
+  row[1] = norskDag(dateStr);
+  HABITS.forEach((h,i)=>{ row[2+i] = entry.habits[h] ? "1" : "0"; });
+  row[8] = entry.supps["Vitamin C"] ? "1" : "0";
+  row[9] = entry.supps["Vitamin D"] ? "1" : "0";
+  row[10] = entry.supps["Tran"] ? "1" : "0";
+  row[11] = entry.diet["Ultraprosessert mat"] ? "1" : "0";
+  row[12] = entry.diet["Sukker"] ? "1" : "0";
+  row[13] = entry.alkohol !== "" && entry.alkohol != null ? entry.alkohol : "0";
+  row[14] = entry.koffein !== "" && entry.koffein != null ? entry.koffein : "0";
+  row[15] = entry.scales.brainfog ?? "";
+  row[16] = entry.scales.energi ?? "";
+  row[17] = entry.scales.stress ?? "";
+  row[18] = entry.health.steg || "";
+  row[19] = entry.health.sovn || "";
+  row[20] = entry.health.hrv || "";
+  row[21] = entry.health.vekt || "";
+  row[22] = entry.health.kal_brukt || "";
+  row[23] = entry.health.kal_balanse || "";
+  row[24] = entry.health.co2_snitt || "";
+  row[25] = entry.health.co2_max || "";
   return row;
 }
 
@@ -372,7 +360,7 @@ async function doSyncToSheet(dateStr, entry){
       );
     } else {
       await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
         { method:"POST", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
           body: JSON.stringify({ values:[row] }) }
       );
