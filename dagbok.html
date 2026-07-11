@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Feltjournal</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -151,7 +150,7 @@
 
   <div class="sync-box">
     <div class="sync-info">
-      Google Status: <span id="googleStatus">ikke tilkoblet</span>
+      Google Status: <span id="googleStatus">venter på bibliotek...</span>
       <div class="error-msg" id="debugError" style="display:none;"></div>
     </div>
     <div>
@@ -214,6 +213,9 @@
   </div>
 
 </div>
+
+<!-- SCRIPT-INNLASTINGEN ER FLYTTET HIT FOR Å SIKRE AT FUNKSJONENE ER KLARE -->
+<script src="https://accounts.google.com/gsi/client" onload="googleScriptLoaded()"></script>
 
 <script>
 const HABITS = ["Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys/utendørs"];
@@ -280,12 +282,14 @@ function showDebugError(msg) {
   }
 }
 
-// ENDRET: Bruker en hybridløsning som ber om Access Token via pop-up på en måte nettleseren godtar
+// KJØRER AUTOMATISK NÅR GOOGLE-SKRIPTET ER HELT KLART I NETTLESEREN
+function googleScriptLoaded() {
+  setGoogleStatus("ikke tilkoblet");
+  initGoogleAuth();
+}
+
 function initGoogleAuth(){
-  if(!window.google || !google.accounts){ 
-    setTimeout(initGoogleAuth, 300); 
-    return; 
-  }
+  if(!window.google || !google.accounts?.oauth2){ return; }
   
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
@@ -296,7 +300,6 @@ function initGoogleAuth(){
         showDebugError("Google-feil: " + (resp.error_description || resp.error));
         return;
       }
-      // Nå mottar vi et ekte adgangstegn (Access Token) som Sheets API godtar!
       googleAccessToken = resp.access_token;
       setGoogleStatus("tilkoblet ✓");
       document.getElementById("googleConnectBtn").style.display = "none";
@@ -309,9 +312,15 @@ function initGoogleAuth(){
 }
 
 document.getElementById("googleConnectBtn").onclick = ()=>{
-  if(!tokenClient){ return; }
-  // Tvinger frem et ekte adgangsvindu som ikke utløser adblock/tredjeparts cookie-blokkering
-  tokenClient.requestAccessToken({ prompt: 'consent' });
+  if(!tokenClient){
+    // Hvis skriptet mot formodning ikke har fyrt av onload ennå, prøver vi å initiere manuelt her
+    initGoogleAuth();
+    if(!tokenClient) {
+      alert("Google-skriptet blokkeres fortsatt av nettleseren. Vennligst sjekk utvidelser.");
+      return;
+    }
+  }
+  tokenClient.requestAccessToken();
 };
 
 document.getElementById("fetchHealthBtn").onclick = async () => {
@@ -326,35 +335,6 @@ async function ensureSpreadsheet(){
   if(KNOWN_SPREADSHEET_ID){
     spreadsheetId = KNOWN_SPREADSHEET_ID;
     return;
-  }
-  try{
-    const stored = await window.storage.get("sheet:spreadsheetId");
-    if(stored && stored.value){
-      spreadsheetId = stored.value;
-      return;
-    }
-  }catch(e){}
-  
-  setGoogleStatus("oppretter ark…");
-  try{
-    const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
-      method:"POST",
-      headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
-      body: JSON.stringify({
-        properties:{ title:"Feltjournal-data" },
-        sheets:[{ properties:{ title:"Logg" }, data:[{ startRow:0, startColumn:0,
-          rowData:[{ values: SHEET_HEADERS.map(h=>({ userEnteredValue:{ stringValue:h } })) }]
-        }]}]
-      })
-    });
-    if(!res.ok) throw new Error("Sheets API feilet: " + res.status);
-    const data = await res.json();
-    spreadsheetId = data.spreadsheetId;
-    try{ await window.storage.set("sheet:spreadsheetId", spreadsheetId); }catch(e){}
-    setGoogleStatus("tilkoblet ✓");
-  }catch(err){
-    console.error(err);
-    setGoogleStatus("ark-feil", true);
   }
 }
 
@@ -635,6 +615,14 @@ async function renderHistory(){
   });
 }
 
+function pad(n){return n<10?'0'+n:n;}
+function shiftDate(dateStr, delta){
+  const d = new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+delta);
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+}
+function formatNorwegian(dateStr){ const [y,m,d] = dateStr.split("-"); return `${d}.${m}.${y}`; }
+function updateDateDisplay(){ document.getElementById("dateDisplay").textContent = formatNorwegian(currentDate); }
+
 // Start oppsett
 document.getElementById("dateInput").value = currentDate; updateDateDisplay();
 document.getElementById("dateInput").onchange = async (e)=>{ if(!isPageLoading) await handleDateChange(e.target.value); };
@@ -642,7 +630,10 @@ document.getElementById("dateDisplay").onclick = ()=>{ const input = document.ge
 document.getElementById("prevDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, -1)); };
 document.getElementById("nextDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, 1)); };
 
-initGoogleAuth();
+// Prøv å starte auth hvis skriptet allerede er i minnet
+if(window.google && google.accounts?.oauth2) {
+  googleScriptLoaded();
+}
 loadEntry(currentDate).then(renderHistory);
 </script>
 </body>
