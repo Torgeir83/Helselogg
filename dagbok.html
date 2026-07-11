@@ -1,1 +1,649 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<title>Feltjournal</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --paper: #EFEDE6;
+    --ink: #232620;
+    --moss: #4B5D45;
+    --moss-dark: #34412F;
+    --clay: #A8562E;
+    --line: #C9C4B4;
+    --card: #F7F5EF;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); padding:0 0 60px 0;
+  }
+  @font-face{
+    font-family:'Source Serif 4';
+    src: local('Georgia');
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:32px 20px;}
 
+  header.top{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:6px;
+  }
+  header.top h1{
+    font-family:var(--serif); font-weight:600; font-size:28px; margin:0; letter-spacing:-0.01em;
+  }
+  header.top .sub{font-family:var(--mono); font-size:11px; color:var(--moss-dark); text-transform:uppercase; letter-spacing:0.08em;}
+
+  .datebar{
+    display:flex; align-items:center; gap:10px; margin:18px 0 28px 0;
+    font-family:var(--mono); font-size:13px;
+  }
+  .datebar button{
+    background:none; border:1px solid var(--line); color:var(--ink);
+    width:28px; height:28px; border-radius:3px; cursor:pointer; font-family:var(--mono);
+  }
+  .datebar button:hover{border-color:var(--moss);}
+  .datebar input[type=date]{
+    font-family:var(--mono); font-size:13px; border:1px solid var(--line);
+    background:var(--card); padding:5px 8px; border-radius:3px; color:var(--ink);
+  }
+  .datebar .status{margin-left:auto; font-size:11px; color:#8b8578;}
+  .datebar .dateDisplay{
+    font-family:var(--mono); font-size:13px; border:1px solid var(--line);
+    background:var(--card); padding:5px 10px; border-radius:3px; color:var(--ink);
+    cursor:pointer; user-select:none;
+  }
+  .datebar .dateDisplay:hover{border-color:var(--moss);}
+
+  section.block{
+    background:var(--card); border:1px solid var(--line); border-radius:4px;
+    padding:18px 20px; margin-bottom:16px;
+  }
+  section.block h2{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
+    color:var(--moss-dark); margin:0 0 14px 0; font-weight:600;
+  }
+
+  .tags{display:flex; flex-wrap:wrap; gap:8px;}
+  .tag{
+    font-family:var(--sans); font-size:13.5px; padding:7px 13px; border-radius:20px;
+    border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--ink);
+    transition:all .12s ease;
+  }
+  .tag.on{background:var(--moss); border-color:var(--moss); color:#fff;}
+  .tag:hover:not(.on){border-color:var(--moss);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media(max-width:520px){.grid2{grid-template-columns:1fr;}}
+
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block; font-size:12px; color:#6b6656; margin-bottom:5px; font-family:var(--sans);
+  }
+  .field .num-row{display:flex; align-items:center; gap:8px;}
+  .field input[type=number]{
+    width:100%; font-family:var(--mono); font-size:15px; border:1px solid var(--line);
+    background:#fff; padding:8px 10px; border-radius:3px; color:var(--ink);
+  }
+  .unit{font-family:var(--mono); font-size:11px; color:#8b8578; white-space:nowrap;}
+
+  .scale{display:flex; align-items:center; gap:10px;}
+  .scale input[type=range]{flex:1; accent-color:var(--clay);}
+  .scale .val{
+    font-family:var(--mono); font-size:18px; width:28px; text-align:center; color:var(--clay); font-weight:600;
+  }
+
+  .healthgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
+  @media(max-width:520px){.healthgrid{grid-template-columns:1fr;}}
+  .healthgrid .hint{font-size:10.5px; color:#a39d8c; margin-top:3px;}
+
+  .history{margin-top:26px;}
+  .history h2{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
+    color:var(--moss-dark); margin:0 0 10px 0;
+  }
+  table.log{width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono);}
+  table.log th, table.log td{
+    text-align:left; padding:7px 8px; border-bottom:1px solid var(--line);
+  }
+  table.log th{color:#8b8578; font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:0.05em;}
+  table.log tr:hover td{background:rgba(75,93,69,0.05);}
+  table.log .rowdate{cursor:pointer; color:var(--moss-dark); font-weight:600;}
+  table.log .rowdate:hover{text-decoration:underline;}
+  .empty{color:#a39d8c; font-size:13px; font-style:italic; padding:6px 0;}
+
+  .save-note{
+    font-family:var(--mono); font-size:10.5px; color:#a39d8c; text-align:right; margin-top:-8px; margin-bottom:14px;
+  }
+  
+  .sync-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+    padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .sync-info { font-family: var(--sans); font-size: 13px; color: var(--ink); }
+  .sync-info span { font-family: var(--mono); font-weight: 600; }
+  .btn-small {
+    background: none; border: 1px solid var(--moss); color: var(--moss);
+    padding: 6px 12px; border-radius: 3px; cursor: pointer; font-family: var(--sans); font-size: 12px;
+  }
+  .btn-small:hover { background: var(--moss); color: #fff; }
+  .error-msg { font-family: var(--mono); font-size: 12px; color: var(--clay); margin-top: 6px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <h1>Feltjournal</h1>
+    <div class="sub">helse · vaner · sensor</div>
+  </header>
+
+  <div class="datebar">
+    <button id="prevDay">‹</button>
+    <input type="date" id="dateInput" lang="nb-NO" style="display:none;">
+    <span class="dateDisplay" id="dateDisplay"></span>
+    <button id="nextDay">›</button>
+    <span class="status" id="saveStatus">klar</span>
+  </div>
+
+  <div class="sync-box">
+    <div class="sync-info">
+      Google Status: <span id="googleStatus">ikke tilkoblet</span>
+      <div class="error-msg" id="debugError" style="display:none;"></div>
+    </div>
+    <div>
+      <button id="googleConnectBtn" class="btn-small" style="border-color: var(--line); color: var(--ink);">Logg inn med Google</button>
+      <button id="fetchHealthBtn" class="btn-small" style="display:none;">Hent helsedata på nytt</button>
+    </div>
+  </div>
+
+  <section class="block">
+    <h2>Vaner</h2>
+    <div class="tags" id="habitTags"></div>
+  </section>
+
+  <section class="block">
+    <h2>Kosttilskudd</h2>
+    <div class="tags" id="suppTags"></div>
+  </section>
+
+  <section class="block">
+    <h2>Kosthold</h2>
+    <div class="tags" id="dietTags"></div>
+  </section>
+
+  <section class="block">
+    <h2>Inntak</h2>
+    <div class="grid2">
+      <div class="field">
+        <label>Alkohol (enheter)</label>
+        <div class="num-row">
+          <input type="number" min="0" step="1" id="alkohol">
+          <span class="unit">enh.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Koffein (kopper)</label>
+        <div class="num-row">
+          <input type="number" min="0" step="1" id="koffein">
+          <span class="unit">kopper</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Tilstand (1–9)</h2>
+    <div id="scales"></div>
+  </section>
+
+  <section class="block">
+    <h2>Helsedata &amp; CO2</h2>
+    <div class="healthgrid" id="healthFields"></div>
+    <div class="hint">Steg, søvn, vekt og kalorier synkroniseres fra Google-skyen din.</div>
+  </section>
+
+  <div class="save-note" id="saveNote">&nbsp;</div>
+
+  <div class="history">
+    <h2>Siste oppføringer</h2>
+    <div id="historyTable"></div>
+  </div>
+
+</div>
+
+<script>
+const HABITS = ["Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys/utendørs"];
+const SUPPS = ["Vitamin C","Vitamin D","Tran"];
+const DIET = ["Ultraprosessert mat","Sukker"];
+const SCALES = [
+  {key:"brainfog", label:"Brainfog"},
+  {key:"energi", label:"Energinivå"},
+  {key:"stress", label:"Stressnivå"}
+];
+const HEALTH = [
+  {key:"steg", label:"Steg", unit:"steg"},
+  {key:"sovn", label:"Søvn", unit:"timer"},
+  {key:"hrv", label:"HRV", unit:"ms"},
+  {key:"vekt", label:"Vekt", unit:"kg"},
+  {key:"kal_brukt", label:"Kalorier brukt (Garmin)", unit:"kcal"},
+  {key:"kal_balanse", label:"Kaloribalanse (Yazio)", unit:"kcal, +/-"},
+  {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm"},
+  {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
+];
+
+const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
+const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets " +
+                     "https://www.googleapis.com/auth/fitness.activity.read " +
+                     "https://www.googleapis.com/auth/fitness.body.read " +
+                     "https://www.googleapis.com/auth/fitness.sleep.read";
+
+const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys",
+  "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
+  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kalorier brukt","Kaloribalanse","CO2 snitt","CO2 maks"];
+
+const NORSKE_DAGER = ["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
+function norskDag(dateStr){
+  const d = new Date(dateStr+"T00:00:00");
+  return NORSKE_DAGER[d.getDay()];
+}
+
+let googleAccessToken = null;
+let tokenClient = null;
+let spreadsheetId = null;
+let isPageLoading = false; 
+let saveTimeout = null;
+
+let currentDate = new Date().toISOString().slice(0,10);
+let currentEntry = emptyEntry();
+
+function emptyEntry(){
+  return { habits:{}, supps:{}, diet:{}, alkohol:"", koffein:"", scales:{brainfog:5, energi:5, stress:5}, health:{} };
+}
+
+function setGoogleStatus(text, isError=false) {
+  const el = document.getElementById("googleStatus");
+  el.textContent = text;
+  el.style.color = isError ? "var(--clay)" : "var(--moss-dark)";
+}
+
+function showDebugError(msg) {
+  const box = document.getElementById("debugError");
+  if(msg) {
+    box.textContent = msg;
+    box.style.display = "block";
+  } else {
+    box.style.display = "none";
+  }
+}
+
+// ENDRET: Bruker en hybridløsning som ber om Access Token via pop-up på en måte nettleseren godtar
+function initGoogleAuth(){
+  if(!window.google || !google.accounts){ 
+    setTimeout(initGoogleAuth, 300); 
+    return; 
+  }
+  
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: SHEETS_SCOPE,
+    callback: async (resp)=>{
+      if(resp.error){
+        setGoogleStatus("innlogging feilet", true);
+        showDebugError("Google-feil: " + (resp.error_description || resp.error));
+        return;
+      }
+      // Nå mottar vi et ekte adgangstegn (Access Token) som Sheets API godtar!
+      googleAccessToken = resp.access_token;
+      setGoogleStatus("tilkoblet ✓");
+      document.getElementById("googleConnectBtn").style.display = "none";
+      document.getElementById("fetchHealthBtn").style.display = "inline-block";
+      showDebugError(null);
+      await ensureSpreadsheet();
+      await loadEntry(currentDate);
+    }
+  });
+}
+
+document.getElementById("googleConnectBtn").onclick = ()=>{
+  if(!tokenClient){ return; }
+  // Tvinger frem et ekte adgangsvindu som ikke utløser adblock/tredjeparts cookie-blokkering
+  tokenClient.requestAccessToken({ prompt: 'consent' });
+};
+
+document.getElementById("fetchHealthBtn").onclick = async () => {
+  setGoogleStatus("oppdaterer helsedata…");
+  showDebugError(null);
+  await fetchAllHealthData(currentDate);
+};
+
+const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
+
+async function ensureSpreadsheet(){
+  if(KNOWN_SPREADSHEET_ID){
+    spreadsheetId = KNOWN_SPREADSHEET_ID;
+    return;
+  }
+  try{
+    const stored = await window.storage.get("sheet:spreadsheetId");
+    if(stored && stored.value){
+      spreadsheetId = stored.value;
+      return;
+    }
+  }catch(e){}
+  
+  setGoogleStatus("oppretter ark…");
+  try{
+    const res = await fetch("https://sheets.googleapis.com/v4/spreadsheets", {
+      method:"POST",
+      headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" },
+      body: JSON.stringify({
+        properties:{ title:"Feltjournal-data" },
+        sheets:[{ properties:{ title:"Logg" }, data:[{ startRow:0, startColumn:0,
+          rowData:[{ values: SHEET_HEADERS.map(h=>({ userEnteredValue:{ stringValue:h } })) }]
+        }]}]
+      })
+    });
+    if(!res.ok) throw new Error("Sheets API feilet: " + res.status);
+    const data = await res.json();
+    spreadsheetId = data.spreadsheetId;
+    try{ await window.storage.set("sheet:spreadsheetId", spreadsheetId); }catch(e){}
+    setGoogleStatus("tilkoblet ✓");
+  }catch(err){
+    console.error(err);
+    setGoogleStatus("ark-feil", true);
+  }
+}
+
+async function fetchExistingDataFromSheet(dateStr) {
+  if (!googleAccessToken || !spreadsheetId) return null;
+  try {
+    const res = await fetch(`https://www.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:Z`, {
+      headers: { "Authorization": "Bearer " + googleAccessToken }
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const rows = data.values || [];
+    if (rows.length <= 1) return null;
+    
+    const foundRow = rows.find(r => r[0] === dateStr);
+    if (!foundRow) return null;
+    
+    const entry = emptyEntry();
+    const getVal = (headerName) => {
+      const idx = SHEET_HEADERS.indexOf(headerName);
+      return (idx !== -1 && foundRow[idx] !== undefined) ? foundRow[idx] : "";
+    };
+    
+    HABITS.forEach(h => { entry.habits[h] = getVal(h === "Dagslys/utendørs" ? "Dagslys" : h) === "1"; });
+    SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
+    DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
+    
+    entry.alkohol = getVal("Alkohol");
+    entry.koffein = getVal("Koffein");
+    entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
+    entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
+    entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
+    
+    HEALTH.forEach(h => {
+      const v = getVal(h.label === "Dagslys" ? "Dagslys" : (h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)))));
+      entry.health[h.key] = v !== "" ? Number(v) : "";
+    });
+    
+    return entry;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function fetchAllHealthData(dateStr) {
+  if (!googleAccessToken) return;
+  
+  const targetDateAtCall = dateStr;
+  const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
+  const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
+  const headers = { "Authorization": "Bearer " + googleAccessToken };
+  
+  let newHealthData = {};
+  let found = false;
+
+  try {
+    const sRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`, { headers });
+    if (sRes.ok) {
+      const d = await sRes.json(); let s = 0; d.point?.forEach(p => s += p.value?.[0]?.intVal || 0);
+      if (s > 0) { newHealthData.steg = s; found = true; }
+    }
+    const cRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`, { headers });
+    if (cRes.ok) {
+      const d = await cRes.json(); let c = 0; d.point?.forEach(p => c += p.value?.[0]?.fpVal || 0);
+      if (c > 0) { newHealthData.kal_brukt = Math.round(c); found = true; }
+    }
+    const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`, { headers });
+    if (wRes.ok) {
+      const d = await wRes.json();
+      if (d.point?.length > 0) {
+        let w = d.point[d.point.length - 1].value?.[0]?.fpVal || 0;
+        if (w > 0) { newHealthData.vekt = Math.round(w * 10) / 10; found = true; }
+      }
+    }
+    const slRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`, { headers });
+    if (slRes.ok) {
+      const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000);
+      if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; }
+    }
+
+    if (found && targetDateAtCall === currentDate) {
+      Object.assign(currentEntry.health, newHealthData);
+      renderHealth();
+      await doSyncToSheet(currentDate, currentEntry);
+      try { await window.storage.set("entry:" + currentDate, JSON.stringify(currentEntry)); } catch(e){}
+    }
+    setGoogleStatus("tilkoblet ✓");
+  } catch (err) {
+    setGoogleStatus("henting feilet", true);
+  }
+}
+
+function entryToRow(dateStr, entry){
+  const row = new Array(SHEET_HEADERS.length).fill("");
+  row[SHEET_HEADERS.indexOf("Dato")] = "'" + dateStr;
+  row[SHEET_HEADERS.indexOf("Dag")] = norskDag(dateStr);
+  HABITS.forEach(h => { row[SHEET_HEADERS.indexOf(h === "Dagslys/utendørs" ? "Dagslys" : h)] = entry.habits[h] ? "1" : "0"; });
+  SUPPS.forEach(s => { row[SHEET_HEADERS.indexOf(s)] = entry.supps[s] ? "1" : "0"; });
+  DIET.forEach(d => { row[SHEET_HEADERS.indexOf(d)] = entry.diet[d] ? "1" : "0"; });
+  row[SHEET_HEADERS.indexOf("Alkohol")] = (entry.alkohol !== "" && entry.alkohol != null) ? entry.alkohol : "";
+  row[SHEET_HEADERS.indexOf("Koffein")] = (entry.koffein !== "" && entry.koffein != null) ? entry.koffein : "";
+  row[SHEET_HEADERS.indexOf("Brainfog")] = entry.scales.brainfog ?? "";
+  row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
+  row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
+  row[SHEET_HEADERS.indexOf("Steg")] = entry.health.steg || "";
+  row[SHEET_HEADERS.indexOf("Søvn")] = entry.health.sovn || "";
+  row[SHEET_HEADERS.indexOf("HRV")] = entry.health.hrv || "";
+  row[SHEET_HEADERS.indexOf("Vekt")] = entry.health.vekt || "";
+  row[SHEET_HEADERS.indexOf("Kalorier brukt")] = entry.health.kal_brukt || "";
+  row[SHEET_HEADERS.indexOf("Kaloribalanse")] = entry.health.kal_balanse || "";
+  row[SHEET_HEADERS.indexOf("CO2 snitt")] = entry.health.co2_snitt || "";
+  row[SHEET_HEADERS.indexOf("CO2 maks")] = entry.health.co2_max || "";
+  return row;
+}
+
+let syncQueue = Promise.resolve();
+async function syncToSheet(dateStr, entry){
+  syncQueue = syncQueue.then(()=> doSyncToSheet(dateStr, entry));
+  return syncQueue;
+}
+
+async function doSyncToSheet(dateStr, entry){
+  if(!googleAccessToken || !spreadsheetId) return;
+  try{
+    const getRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:A`, { headers:{ "Authorization":"Bearer "+googleAccessToken } });
+    const getData = await getRes.json();
+    const rows = getData.values || [];
+    let rowIndex = rows.findIndex(r => r[0] === dateStr);
+    const row = entryToRow(dateStr, entry);
+    if(rowIndex > 0 || (rowIndex === 0 && rows[0] && rows[0][0] === dateStr)){
+      const sheetRowNum = rowIndex + 1;
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${String.fromCharCode(65+SHEET_HEADERS.length-1)}${sheetRowNum}?valueInputOption=USER_ENTERED`, {
+        method:"PUT", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, body: JSON.stringify({ values:[row] })
+      });
+    } else {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+        method:"POST", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, body: JSON.stringify({ values:[row] })
+      });
+    }
+  }catch(err) { console.error(err); }
+}
+
+function renderTags(containerId, list, storeKey){
+  const c = document.getElementById(containerId); c.innerHTML = "";
+  list.forEach(name=>{
+    const btn = document.createElement("button");
+    btn.className = "tag" + (currentEntry[storeKey][name] ? " on" : ""); btn.textContent = name;
+    btn.onclick = ()=>{ 
+      if(isPageLoading) return;
+      currentEntry[storeKey][name] = !currentEntry[storeKey][name]; 
+      btn.classList.toggle("on"); 
+      triggerSave(); 
+    };
+    c.appendChild(btn);
+  });
+}
+
+function renderScales(){
+  const c = document.getElementById("scales"); c.innerHTML = "";
+  SCALES.forEach(s=>{
+    const row = document.createElement("div"); row.className = "field";
+    row.innerHTML = `<label>${s.label}</label><div class="scale"><input type="range" min="1" max="9" step="1" value="${currentEntry.scales[s.key] ?? 5}" data-key="${s.key}"><span class="val">${currentEntry.scales[s.key] ?? 5}</span></div>`;
+    const input = row.querySelector("input"); const val = row.querySelector(".val");
+    input.oninput = ()=>{ val.textContent = input.value; currentEntry.scales[s.key] = parseInt(input.value,10); };
+    input.onchange = ()=>{ triggerSave(); };
+    c.appendChild(row);
+  });
+}
+
+function renderHealth(){
+  const c = document.getElementById("healthFields"); c.innerHTML = "";
+  HEALTH.forEach(h=>{
+    const f = document.createElement("div"); f.className = "field";
+    f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" data-key="${h.key}" value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
+    const input = f.querySelector("input");
+    input.oninput = ()=>{ 
+      if(isPageLoading) return;
+      currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; 
+      triggerSave(); 
+    };
+    c.appendChild(f);
+  });
+}
+
+function renderIntake(){
+  document.getElementById("alkohol").value = currentEntry.alkohol;
+  document.getElementById("koffein").value = currentEntry.koffein;
+}
+document.getElementById("alkohol").oninput = (e)=>{ if(!isPageLoading){ currentEntry.alkohol = e.target.value; triggerSave(); } };
+document.getElementById("koffein").oninput = (e)=>{ if(!isPageLoading){ currentEntry.koffein = e.target.value; triggerSave(); } };
+
+function renderAll(){ renderTags("habitTags", HABITS, "habits"); renderTags("suppTags", SUPPS, "supps"); renderTags("dietTags", DIET, "diet"); renderScales(); renderHealth(); renderIntake(); }
+
+function triggerSave(){
+  if (isPageLoading) return;
+  document.getElementById("saveStatus").textContent = "lagrer…";
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(executeSave, 400);
+}
+
+async function executeSave(){
+  if (isPageLoading) return;
+  const snapshotDate = currentDate;
+  const snapshotEntry = JSON.parse(JSON.stringify(currentEntry));
+  
+  if(googleAccessToken && spreadsheetId) await syncToSheet(snapshotDate, snapshotEntry);
+  try{
+    await window.storage.set("entry:"+snapshotDate, JSON.stringify(snapshotEntry));
+    if (snapshotDate === currentDate) {
+      document.getElementById("saveStatus").textContent = "lagret";
+      renderHistory();
+    }
+  }catch(err){}
+}
+
+async function loadEntry(dateStr) {
+  clearTimeout(saveTimeout);
+  document.getElementById("saveStatus").textContent = "laster…";
+  
+  let dataFromSheet = null;
+  if (googleAccessToken && spreadsheetId) {
+    dataFromSheet = await fetchExistingDataFromSheet(dateStr);
+  }
+  
+  if (dataFromSheet) {
+    currentEntry = dataFromSheet;
+    document.getElementById("saveStatus").textContent = "hentet fra sky";
+  } else {
+    try { 
+      const res = await window.storage.get("entry:"+dateStr); 
+      currentEntry = res ? JSON.parse(res.value) : emptyEntry(); 
+    } catch(e) { 
+      currentEntry = emptyEntry(); 
+    }
+    document.getElementById("saveStatus").textContent = "klar";
+  }
+  
+  renderAll();
+  
+  if (!dataFromSheet && googleAccessToken) {
+    await fetchAllHealthData(dateStr);
+  }
+}
+
+async function handleDateChange(newDate) {
+  clearTimeout(saveTimeout);
+  isPageLoading = true;
+  document.getElementById("saveStatus").textContent = "bytter dag…";
+  
+  const oldDate = currentDate;
+  const oldEntry = JSON.parse(JSON.stringify(currentEntry));
+  if(googleAccessToken && spreadsheetId) await doSyncToSheet(oldDate, oldEntry);
+  try { await window.storage.set("entry:" + oldDate, JSON.stringify(oldEntry)); } catch(e){}
+  
+  currentDate = newDate;
+  document.getElementById("dateInput").value = currentDate;
+  updateDateDisplay();
+  
+  await loadEntry(currentDate);
+  isPageLoading = false;
+  await renderHistory();
+}
+
+async function renderHistory(){
+  const el = document.getElementById("historyTable"); let keys;
+  try{ const res = await window.storage.list("entry:"); keys = res ? res.keys : []; }catch(e){ keys = []; }
+  if(!keys || keys.length===0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
+  keys.sort().reverse(); const rows = [];
+  for(const k of keys.slice(0,14)){
+    try{
+      const res = await window.storage.get(k); const e = JSON.parse(res.value); const date = k.replace("entry:","");
+      rows.push(`<tr><td class="rowdate" data-date="${date}">${date}</td><td>${Object.values(e.habits||{}).filter(Boolean).length}/${HABITS.length}</td><td>${e.scales?.brainfog ?? "–"}</td><td>${e.health?.co2_snitt || "–"}</td></tr>`);
+    }catch(e){}
+  }
+  el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  el.querySelectorAll(".rowdate").forEach(td=>{
+    td.onclick = async ()=>{ if(!isPageLoading) await handleDateChange(td.dataset.date); };
+  });
+}
+
+// Start oppsett
+document.getElementById("dateInput").value = currentDate; updateDateDisplay();
+document.getElementById("dateInput").onchange = async (e)=>{ if(!isPageLoading) await handleDateChange(e.target.value); };
+document.getElementById("dateDisplay").onclick = ()=>{ const input = document.getElementById("dateInput"); if(input.showPicker){ input.showPicker(); } else { input.style.display="inline-block"; input.focus(); } };
+document.getElementById("prevDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, -1)); };
+document.getElementById("nextDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, 1)); };
+
+initGoogleAuth();
+loadEntry(currentDate).then(renderHistory);
+</script>
+</body>
+</html>
