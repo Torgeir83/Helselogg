@@ -255,6 +255,7 @@ let googleAccessToken = null;
 let tokenClient = null;
 let spreadsheetId = null;
 let isInitialLoadingFromSheet = false;
+let saveTimeout;
 
 function setGoogleStatus(text, isError=false) {
   const el = document.getElementById("googleStatus");
@@ -415,8 +416,6 @@ async function fetchAllHealthData(dateStr) {
       data.point?.forEach(p => { totalSteps += p.value?.[0]?.intVal || 0; });
       if (totalSteps > 0) {
         currentEntry.health.steg = totalSteps;
-        const input = document.querySelector('input[data-key="steg"]');
-        if (input) input.value = totalSteps;
         foundAnyData = true;
       }
     } else { apiErrors.push("Steg API feil (" + stepRes.status + ")"); }
@@ -428,10 +427,7 @@ async function fetchAllHealthData(dateStr) {
       let totalCals = 0;
       data.point?.forEach(p => { totalCals += p.value?.[0]?.fpVal || 0; });
       if (totalCals > 0) {
-        const fixedCals = Math.round(totalCals);
-        currentEntry.health.kal_brukt = fixedCals;
-        const input = document.querySelector('input[data-key="kal_brukt"]');
-        if (input) input.value = fixedCals;
+        currentEntry.health.kal_brukt = Math.round(totalCals);
         foundAnyData = true;
       }
     }
@@ -444,10 +440,7 @@ async function fetchAllHealthData(dateStr) {
         const lastPoint = data.point[data.point.length - 1];
         const weight = lastPoint.value?.[0]?.fpVal || 0;
         if (weight > 0) {
-          const fixedWeight = Math.round(weight * 10) / 10;
-          currentEntry.health.vekt = fixedWeight;
-          const input = document.querySelector('input[data-key="vekt"]');
-          if (input) input.value = fixedWeight;
+          currentEntry.health.vekt = Math.round(weight * 10) / 10;
           foundAnyData = true;
         }
       }
@@ -464,10 +457,7 @@ async function fetchAllHealthData(dateStr) {
         totalSleepMillis += (endMs - startMs);
       });
       if (totalSleepMillis > 0) {
-        const sleepHours = Math.round((totalSleepMillis / (1000 * 60 * 60)) * 10) / 10;
-        currentEntry.health.sovn = sleepHours;
-        const input = document.querySelector('input[data-key="sovn"]');
-        if (input) input.value = sleepHours;
+        currentEntry.health.sovn = Math.round((totalSleepMillis / (1000 * 60 * 60)) * 10) / 10;
         foundAnyData = true;
       }
     }
@@ -479,7 +469,13 @@ async function fetchAllHealthData(dateStr) {
     }
     
     setGoogleStatus("tilkoblet ✓");
-    forceSaveImmediately();
+    renderHealth(); // Tegn de nye tallene på skjermen
+    
+    // Viktig: Vi lagrer KUN hvis vi faktisk fant nye helsedata, for å unngå å overskrive med ingenting
+    if(foundAnyData) {
+      await doSyncToSheet(dateStr, currentEntry);
+      try { await window.storage.set("entry:" + dateStr, JSON.stringify(currentEntry)); } catch(e){}
+    }
   } catch (err) {
     console.error(err);
     showDebugError("Systemfeil under henting: " + err.message);
@@ -502,8 +498,11 @@ function entryToRow(dateStr, entry){
   row[SHEET_HEADERS.indexOf("Tran")] = entry.supps["Tran"] ? "1" : "0";
   row[SHEET_HEADERS.indexOf("Ultraprosessert mat")] = entry.diet["Ultraprosessert mat"] ? "1" : "0";
   row[SHEET_HEADERS.indexOf("Sukker")] = entry.diet["Sukker"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Alkohol")] = entry.alkohol !== "" && entry.alkohol != null ? entry.alkohol : "0";
-  row[SHEET_HEADERS.indexOf("Koffein")] = entry.koffein !== "" && entry.koffein != null ? entry.koffein : "0";
+  
+  // GJØR DETTE ROBUST: Unngå å tvinge tomme felter til "0" hvis de er tomme strenger
+  row[SHEET_HEADERS.indexOf("Alkohol")] = (entry.alkohol !== "" && entry.alkohol != null) ? entry.alkohol : "";
+  row[SHEET_HEADERS.indexOf("Koffein")] = (entry.koffein !== "" && entry.koffein != null) ? entry.koffein : "";
+  
   row[SHEET_HEADERS.indexOf("Brainfog")] = entry.scales.brainfog ?? "";
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
@@ -602,7 +601,6 @@ document.getElementById("koffein").oninput = (e)=>{ currentEntry.koffein = e.tar
 
 function renderAll(){ renderTags("habitTags", HABITS, "habits"); renderTags("suppTags", SUPPS, "supps"); renderTags("dietTags", DIET, "diet"); renderScales(); renderHealth(); renderIntake(); }
 
-let saveTimeout;
 function saveEntry(){ 
   if (isInitialLoadingFromSheet) return;
   document.getElementById("saveStatus").textContent = "lagrer…"; 
@@ -610,18 +608,15 @@ function saveEntry(){
   saveTimeout = setTimeout(()=> attemptSave(true), 400); 
 }
 
-// Tvinger umiddelbar lagring uten timeout (brukes ved datobytte)
-function forceSaveImmediately() {
+async function forceSaveImmediately() {
   if (isInitialLoadingFromSheet) return;
   clearTimeout(saveTimeout);
-  if (googleAccessToken && spreadsheetId) syncToSheet(currentDate, currentEntry);
-  try {
-    window.storage.set("entry:" + currentDate, JSON.stringify(currentEntry));
-  } catch(e) {}
+  await doSyncToSheet(currentDate, currentEntry);
+  try { window.storage.set("entry:" + currentDate, JSON.stringify(currentEntry)); } catch(e) {}
 }
 
 async function attemptSave(allowRetry){
-  if(googleAccessToken && spreadsheetId) syncToSheet(currentDate, currentEntry);
+  if(googleAccessToken && spreadsheetId) await syncToSheet(currentDate, currentEntry);
   try{
     await window.storage.set("entry:"+currentDate, JSON.stringify(currentEntry));
     document.getElementById("saveStatus").textContent = "lagret"; renderHistory();
@@ -653,16 +648,17 @@ async function loadEntry(dateStr) {
   renderAll();
   isInitialLoadingFromSheet = false;
   
+  // Asynkron henting skjer KUN hvis dagen var fullstendig tom i arket fra før
   if (!dataFromSheet && googleAccessToken) {
     await fetchAllHealthData(dateStr);
   }
 }
 
 async function handleDateChange(newDate) {
-  // 1. Tving frem lagring av NÅVÆRENDE data på NÅVÆRENDE dato før vi bytter
-  forceSaveImmediately();
+  // 1. Tving frem fullført lagring av den gamle datoen først
+  await forceSaveImmediately();
   
-  // 2. Bytt dato og last inn de nye dataene
+  // 2. Bytt dato og last inn
   currentDate = newDate;
   document.getElementById("dateInput").value = currentDate;
   updateDateDisplay();
@@ -683,9 +679,7 @@ async function renderHistory(){
   }
   el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
   el.querySelectorAll(".rowdate").forEach(td=>{
-    td.onclick = async ()=>{
-      await handleDateChange(td.dataset.date);
-    };
+    td.onclick = async ()=>{ await handleDateChange(td.dataset.date); };
   });
 }
 
