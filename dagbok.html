@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.1</title>
+<title>Feltjournal v1.2</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -117,30 +117,13 @@
   table.log .rowdate{cursor:pointer; color:var(--moss-dark); font-weight:600;}
   table.log .rowdate:hover{text-decoration:underline;}
   .empty{color:#a39d8c; font-size:13px; font-style:italic; padding:6px 0;}
-
-  .save-note{
-    font-family:var(--mono); font-size:10.5px; color:#a39d8c; text-align:right; margin-top:-8px; margin-bottom:14px;
-  }
-  
-  .sync-box {
-    background: var(--card); border: 1px solid var(--line); border-radius: 4px;
-    padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  }
-  .sync-info { font-family: var(--sans); font-size: 13px; color: var(--ink); }
-  .sync-info span { font-family: var(--mono); font-weight: 600; }
-  .btn-small {
-    background: none; border: 1px solid var(--moss); color: var(--moss);
-    padding: 6px 12px; border-radius: 3px; cursor: pointer; font-family: var(--sans); font-size: 12px;
-  }
-  .btn-small:hover { background: var(--moss); color: #fff; }
-  .error-msg { font-family: var(--mono); font-size: 12px; color: var(--clay); margin-top: 6px; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.1</span></h1>
+    <h1>Feltjournal<span>v1.2</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -206,10 +189,7 @@
   <section class="block">
     <h2>Helsedata &amp; CO2</h2>
     <div class="healthgrid" id="healthFields"></div>
-    <div class="hint">Steg, søvn, vekt og kalorier synkroniseres fra Google-skyen din.</div>
   </section>
-
-  <div class="save-note" id="saveNote">&nbsp;</div>
 
   <div class="history">
     <h2>Siste oppføringer</h2>
@@ -275,7 +255,6 @@ function setGoogleStatus(text, isError=false) {
   el.style.color = isError ? "var(--clay)" : "var(--moss-dark)";
 }
 
-// ... initiering av Google og API forblir intakt ...
 function googleScriptLoaded() { setGoogleStatus("ikke tilkoblet"); initGoogleAuth(); }
 function initGoogleAuth(){
   if(!window.google || !google.accounts?.oauth2){ return; }
@@ -287,14 +266,13 @@ function initGoogleAuth(){
       setGoogleStatus("tilkoblet ✓");
       document.getElementById("googleConnectBtn").style.display = "none";
       document.getElementById("fetchHealthBtn").style.display = "inline-block";
-      await ensureSpreadsheet();
+      spreadsheetId = KNOWN_SPREADSHEET_ID;
       await loadEntry(currentDate);
     }
   });
 }
 document.getElementById("googleConnectBtn").onclick = ()=>{ if(!tokenClient){ initGoogleAuth(); } tokenClient.requestAccessToken(); };
 const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
-async function ensureSpreadsheet(){ if(KNOWN_SPREADSHEET_ID){ spreadsheetId = KNOWN_SPREADSHEET_ID; } }
 
 async function fetchExistingDataFromSheet(dateStr) {
   if (!googleAccessToken || !spreadsheetId) return null;
@@ -411,8 +389,7 @@ function renderHealth(){
     const f = document.createElement("div"); f.className = "field";
     f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" value="${currentEntry.health[h.key] ?? ''}"></div>`;
     const input = f.querySelector("input");
-    input.oninput = daylightCheck; 
-    function daylightCheck(){ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); }
+    input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); };
     c.appendChild(f);
   });
 }
@@ -434,30 +411,25 @@ function triggerDebouncedSave(){
 async function executeSaveDirectly(){
   const snapshotDate = currentDate; const snapshotEntry = JSON.parse(JSON.stringify(currentEntry));
   if(googleAccessToken && spreadsheetId) await syncToSheet(snapshotDate, snapshotEntry);
-  try{
-    await window.storage.set("entry:"+snapshotDate, JSON.stringify(snapshotEntry));
-    if (snapshotDate === currentDate) { document.getElementById("saveStatus").textContent = "lagret"; renderHistory(); }
-  }catch(err){}
+  // RETTET I v1.2: Bruker utelukkende localStorage som fungerer overalt, helt uten avhengigheter
+  localStorage.setItem("entry:" + snapshotDate, JSON.stringify(snapshotEntry));
+  if (snapshotDate === currentDate) { document.getElementById("saveStatus").textContent = "lagret"; renderHistory(); }
 }
 
 async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "laster…";
   
-  // Hent lokal lagring først som vår trygge "fasit"
   let localData = null;
-  try { const res = await window.storage.get("entry:"+dateStr); if(res) localData = JSON.parse(res.value); } catch(e){}
+  const stored = localStorage.getItem("entry:" + dateStr);
+  if(stored) localData = JSON.parse(stored);
   
-  // Hent fra Google Sheets
   let sheetData = null;
   if (googleAccessToken && spreadsheetId) { sheetData = await fetchExistingDataFromSheet(dateStr); }
   
-  // RETTET I v1.1: Fletter sammen i stedet for å overskrive blindt. Lokale data har prioritet over tomme sky-svar!
   if (localData || sheetData) {
     currentEntry = localData || emptyEntry();
     if (sheetData) {
-      // Hvis arket har helsedata, fyller vi inn det som mangler lokalt
       Object.assign(currentEntry.health, sheetData.health);
-      // Hvis lokal kopi var helt tom, men arket har data, bruk arket
       if(!localData) currentEntry = sheetData;
     }
     document.getElementById("saveStatus").textContent = "synkronisert";
@@ -479,24 +451,27 @@ async function handleDateChange(newDate) {
   updateDateDisplay();
   
   await loadEntry(currentDate);
-  await renderHistory();
+  renderHistory();
 }
 
-async function renderHistory(){
-  const el = document.getElementById("historyTable"); let keys;
-  try{ const res = await window.storage.list("entry:"); keys = res ? res.keys : []; }catch(e){ keys = []; }
-  if(!keys || keys.length===0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
+function renderHistory(){
+  const el = document.getElementById("historyTable"); 
+  const keys = [];
+  for(let i=0; i<localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if(k.startsWith("entry:")) keys.push(k);
+  }
+  if(keys.length===0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
   keys.sort().reverse(); const rows = [];
   for(const k of keys.slice(0,14)){
-    try{
-      const res = await window.storage.get(k); const e = JSON.parse(res.value); const date = k.replace("entry:","");
-      rows.push(`<tr><td class="rowdate" data-date="${date}">${date}</td><td>${Object.values(e.habits||{}).filter(Boolean).length}/${HABITS.length}</td><td>${e.scales?.brainfog ?? "–"}</td><td>${e.health?.co2_snitt || "–"}</td></tr>`);
-    }catch(e){}
+    const e = JSON.parse(localStorage.getItem(k)); const date = k.replace("entry:","");
+    rows.push(`<tr><td class="rowdate" data-date="${date}">${date}</td><td>${Object.values(e.habits||{}).filter(Boolean).length}/${HABITS.length}</td><td>${e.scales?.brainfog ?? "–"}</td><td>${e.health?.co2_snitt || "–"}</td></tr>`);
   }
   el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
   el.querySelectorAll(".rowdate").forEach(td=>{ td.onclick = async ()=>{ await handleDateChange(td.dataset.date); }; });
 }
 
+function pad(n){return n<10?'0'+n:n;}
 function shiftDate(dateStr, delta){
   const d = new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+delta);
   return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
@@ -506,11 +481,12 @@ function updateDateDisplay(){ document.getElementById("dateDisplay").textContent
 
 document.getElementById("dateInput").value = currentDate; updateDateDisplay();
 document.getElementById("dateInput").onchange = async (e)=>{ if(e.target.value > todayStr) { e.target.value = currentDate; return; } await handleDateChange(e.target.value); };
-document.getElementById("dateDisplay").onclick = ()=>{ const input = document.getElementById("dateInput"); if(input.showPicker){ input.showPicker(); } };
 document.getElementById("prevDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, -1)); };
 document.getElementById("nextDay").onclick = async ()=>{ if(currentDate < todayStr) await handleDateChange(shiftDate(currentDate, 1)); };
 
-document.addEventListener("DOMContentLoaded", () => { loadEntry(currentDate).then(renderHistory); });
+// Start oppsett umiddelbart
+loadEntry(currentDate);
+renderHistory();
 </script>
 </body>
 </html>
