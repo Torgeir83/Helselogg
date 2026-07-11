@@ -243,7 +243,6 @@ const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets " +
                      "https://www.googleapis.com/auth/fitness.body.read " +
                      "https://www.googleapis.com/auth/fitness.sleep.read";
 
-// RETTET: "Dagslys/utendørs" samsvarer nå med arrayet over, så lagringen ikke krasjer
 const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys/utendørs",
   "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
   "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kalorier brukt","Kaloribalanse","CO2 snitt","CO2 maks"];
@@ -257,7 +256,6 @@ function norskDag(dateStr){
 let googleAccessToken = null;
 let tokenClient = null;
 let spreadsheetId = null;
-let isPageLoading = false; 
 let saveTimeout = null;
 
 const todayStr = new Date().toISOString().slice(0,10);
@@ -291,7 +289,6 @@ function googleScriptLoaded() {
 
 function initGoogleAuth(){
   if(!window.google || !google.accounts?.oauth2){ return; }
-  
   tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID,
     scope: SHEETS_SCOPE,
@@ -313,13 +310,7 @@ function initGoogleAuth(){
 }
 
 document.getElementById("googleConnectBtn").onclick = ()=>{
-  if(!tokenClient){
-    initGoogleAuth();
-    if(!tokenClient) {
-      alert("Google-skriptet blokkeres fortsatt av nettleseren. Vennligst sjekk utvidelser.");
-      return;
-    }
-  }
+  if(!tokenClient){ initGoogleAuth(); }
   tokenClient.requestAccessToken();
 };
 
@@ -331,10 +322,7 @@ document.getElementById("fetchHealthBtn").onclick = async () => {
 
 const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
 async function ensureSpreadsheet(){
-  if(KNOWN_SPREADSHEET_ID){
-    spreadsheetId = KNOWN_SPREADSHEET_ID;
-    return;
-  }
+  if(KNOWN_SPREADSHEET_ID){ spreadsheetId = KNOWN_SPREADSHEET_ID; return; }
 }
 
 async function fetchExistingDataFromSheet(dateStr) {
@@ -374,9 +362,7 @@ async function fetchExistingDataFromSheet(dateStr) {
     });
     
     return entry;
-  } catch (err) {
-    return null;
-  }
+  } catch (err) { return null; }
 }
 
 async function fetchAllHealthData(dateStr) {
@@ -414,16 +400,13 @@ async function fetchAllHealthData(dateStr) {
       if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; }
     }
 
-    if (found && targetDateAtCall === currentDate && !isPageLoading) {
+    if (found && targetDateAtCall === currentDate) {
       Object.assign(currentEntry.health, newHealthData);
       renderHealth();
-      await doSyncToSheet(currentDate, currentEntry);
-      try { await window.storage.set("entry:" + currentDate, JSON.stringify(currentEntry)); } catch(e){}
+      await executeSaveDirectly();
     }
     setGoogleStatus("tilkoblet ✓");
-  } catch (err) {
-    setGoogleStatus("henting feilet", true);
-  }
+  } catch (err) { setGoogleStatus("henting feilet", true); }
 }
 
 function entryToRow(dateStr, entry){
@@ -456,7 +439,7 @@ async function syncToSheet(dateStr, entry){
 }
 
 async function doSyncToSheet(dateStr, entry){
-  if(!googleAccessToken || !spreadsheetId || isPageLoading) return;
+  if(!googleAccessToken || !spreadsheetId) return;
   try{
     const getRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:A`, { headers:{ "Authorization":"Bearer "+googleAccessToken } });
     const getData = await getRes.json();
@@ -476,16 +459,16 @@ async function doSyncToSheet(dateStr, entry){
   }catch(err) { console.error(err); }
 }
 
+// DET NYE PRINSIPPET: Feltene lytter ALDRI på lagring. De bare oppdaterer minnet underveis.
 function renderTags(containerId, list, storeKey){
   const c = document.getElementById(containerId); c.innerHTML = "";
   list.forEach(name=>{
     const btn = document.createElement("button");
     btn.className = "tag" + (currentEntry[storeKey][name] ? " on" : ""); btn.textContent = name;
     btn.onclick = ()=>{ 
-      if(isPageLoading) return;
       currentEntry[storeKey][name] = !currentEntry[storeKey][name]; 
       btn.classList.toggle("on"); 
-      triggerSave(); 
+      triggerDebouncedSave(); // Auto-lagrer kun etter pause under utfylling, aldri ved datobytte
     };
     c.appendChild(btn);
   });
@@ -498,7 +481,7 @@ function renderScales(){
     row.innerHTML = `<label>${s.label}</label><div class="scale"><input type="range" min="1" max="9" step="1" value="${currentEntry.scales[s.key] ?? 5}" data-key="${s.key}"><span class="val">${currentEntry.scales[s.key] ?? 5}</span></div>`;
     const input = row.querySelector("input"); const val = row.querySelector(".val");
     input.oninput = ()=>{ val.textContent = input.value; currentEntry.scales[s.key] = parseInt(input.value,10); };
-    input.onchange = ()=>{ triggerSave(); };
+    input.onchange = ()=>{ triggerDebouncedSave(); };
     c.appendChild(row);
   });
 }
@@ -507,13 +490,9 @@ function renderHealth(){
   const c = document.getElementById("healthFields"); c.innerHTML = "";
   HEALTH.forEach(h=>{
     const f = document.createElement("div"); f.className = "field";
-    f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" data-key="${h.key}" value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
+    f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" data-key="${h.key}" value="${currentEntry.health[h.key] ?? ''}"></div>`;
     const input = f.querySelector("input");
-    input.oninput = ()=>{ 
-      if(isPageLoading) return;
-      currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; 
-      triggerSave(); 
-    };
+    input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); };
     c.appendChild(f);
   });
 }
@@ -522,24 +501,22 @@ function renderIntake(){
   document.getElementById("alkohol").value = currentEntry.alkohol;
   document.getElementById("koffein").value = currentEntry.koffein;
 }
-document.getElementById("alkohol").oninput = (e)=>{ if(!isPageLoading){ currentEntry.alkohol = e.target.value; triggerSave(); } };
-document.getElementById("koffein").oninput = (e)=>{ if(!isPageLoading){ currentEntry.koffein = e.target.value; triggerSave(); } };
+document.getElementById("alkohol").oninput = (e)=>{ currentEntry.alkohol = e.target.value; triggerDebouncedSave(); };
+document.getElementById("koffein").oninput = (e)=>{ currentEntry.koffein = e.target.value; triggerDebouncedSave(); };
 
 function renderAll(){ renderTags("habitTags", HABITS, "habits"); renderTags("suppTags", SUPPS, "supps"); renderTags("dietTags", DIET, "diet"); renderScales(); renderHealth(); renderIntake(); }
 
-function triggerSave(){
-  // RETTET: Avbryter lagring umiddelbart hvis siden er i laste-modus, forhindrer overskriving av data
-  if (isPageLoading) return;
-  document.getElementById("saveStatus").textContent = "lagrer…";
+// Frivillig auto-lagring mens du skriver (debounced)
+function triggerDebouncedSave(){
+  document.getElementById("saveStatus").textContent = "endret…";
   clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(executeSave, 400);
+  saveTimeout = setTimeout(executeSaveDirectly, 1000);
 }
 
-async function executeSave(){
-  if (isPageLoading) return;
+// Ren, isolert lagringskommando. Kjøres direkte ved datobytte for å garantere at alt blir med
+async function executeSaveDirectly(){
   const snapshotDate = currentDate;
   const snapshotEntry = JSON.parse(JSON.stringify(currentEntry));
-  
   if(googleAccessToken && spreadsheetId) await syncToSheet(snapshotDate, snapshotEntry);
   try{
     await window.storage.set("entry:"+snapshotDate, JSON.stringify(snapshotEntry));
@@ -551,7 +528,6 @@ async function executeSave(){
 }
 
 async function loadEntry(dateStr) {
-  clearTimeout(saveTimeout);
   document.getElementById("saveStatus").textContent = "laster…";
   
   let dataFromSheet = null;
@@ -579,22 +555,21 @@ async function loadEntry(dateStr) {
   }
 }
 
+// DEN IDIOTSIKKRE REKKEFØLGEN: Lagre først det som står på skjermen, SÅ bytt dato og last inn på nytt.
 async function handleDateChange(newDate) {
   clearTimeout(saveTimeout);
-  isPageLoading = true;
-  document.getElementById("saveStatus").textContent = "bytter dag…";
+  document.getElementById("saveStatus").textContent = "lagrer gammel dag…";
   
-  const oldDate = currentDate;
-  const oldEntry = JSON.parse(JSON.stringify(currentEntry));
-  if(googleAccessToken && spreadsheetId) await doSyncToSheet(oldDate, oldEntry);
-  try { await window.storage.set("entry:" + oldDate, JSON.stringify(oldEntry)); } catch(e){}
+  // 1. Tving frem lagring av NÅVÆRENDE data før vi flytter oss en millimeter
+  await executeSaveDirectly();
   
+  // 2. Flytt datoen trygt
   currentDate = newDate;
   document.getElementById("dateInput").value = currentDate;
   updateDateDisplay();
   
+  // 3. Last inn den nye dagen
   await loadEntry(currentDate);
-  isPageLoading = false;
   await renderHistory();
 }
 
@@ -611,7 +586,7 @@ async function renderHistory(){
   }
   el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
   el.querySelectorAll(".rowdate").forEach(td=>{
-    td.onclick = async ()=>{ if(!isPageLoading) await handleDateChange(td.dataset.date); };
+    td.onclick = async ()=>{ await handleDateChange(td.dataset.date); };
   });
 }
 
@@ -622,7 +597,6 @@ function shiftDate(dateStr, delta){
 }
 function formatNorwegian(dateStr){ const [y,m,d] = dateStr.split("-"); return `${d}.${m}.${y}`; }
 
-// RETTET: Håndterer også deaktivering av fram-knappen hvis vi er på dagens dato
 function updateDateDisplay(){ 
   document.getElementById("dateDisplay").textContent = formatNorwegian(currentDate); 
   document.getElementById("nextDay").disabled = (currentDate >= todayStr);
@@ -630,24 +604,19 @@ function updateDateDisplay(){
 
 document.getElementById("dateInput").value = currentDate; updateDateDisplay();
 document.getElementById("dateInput").onchange = async (e)=>{ 
-  if(!isPageLoading) {
-    if(e.target.value > todayStr) {
-      alert("Du kan ikke logge fram i tid.");
-      document.getElementById("dateInput").value = currentDate;
-      return;
-    }
-    await handleDateChange(e.target.value); 
+  if(e.target.value > todayStr) {
+    alert("Du kan ikke logge fram i tid.");
+    document.getElementById("dateInput").value = currentDate;
+    return;
   }
+  await handleDateChange(e.target.value); 
 };
 document.getElementById("dateDisplay").onclick = ()=>{ const input = document.getElementById("dateInput"); if(input.showPicker){ input.showPicker(); } else { input.style.display="inline-block"; input.focus(); } };
-document.getElementById("prevDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, -1)); };
+document.getElementById("prevDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, -1)); };
 document.getElementById("nextDay").onclick = async ()=>{ 
-  if(!isPageLoading && currentDate < todayStr) await handleDateChange(shiftDate(currentDate, 1)); 
+  if(currentDate < todayStr) await handleDateChange(shiftDate(currentDate, 1)); 
 };
 
-if(window.google && google.accounts?.oauth2) {
-  googleScriptLoaded();
-}
 loadEntry(currentDate).then(renderHistory);
 </script>
 </body>
