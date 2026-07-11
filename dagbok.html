@@ -254,8 +254,15 @@ function norskDag(dateStr){
 let googleAccessToken = null;
 let tokenClient = null;
 let spreadsheetId = null;
-let isInitialLoadingFromSheet = false;
-let saveTimeout;
+let isPageLoading = false; // Sperreflagg under skifte av datoer
+let saveTimeout = null;
+
+let currentDate = new Date().toISOString().slice(0,10);
+let currentEntry = emptyEntry();
+
+function emptyEntry(){
+  return { habits:{}, supps:{}, diet:{}, alkohol:"", koffein:"", scales:{brainfog:5, energi:5, stress:5}, health:{} };
+}
 
 function setGoogleStatus(text, isError=false) {
   const el = document.getElementById("googleStatus");
@@ -300,7 +307,7 @@ document.getElementById("googleConnectBtn").onclick = ()=>{
   tokenClient.requestAccessToken();
 };
 
-document.getElementById("fetchHealthBtn").onclick = async ()=>{
+document.getElementById("fetchHealthBtn").onclick = async () => {
   setGoogleStatus("oppdaterer helsedata…");
   showDebugError(null);
   await fetchAllHealthData(currentDate);
@@ -347,13 +354,11 @@ async function ensureSpreadsheet(){
 
 async function fetchExistingDataFromSheet(dateStr) {
   if (!googleAccessToken || !spreadsheetId) return null;
-  
   try {
     const res = await fetch(`https://www.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:Z`, {
       headers: { "Authorization": "Bearer " + googleAccessToken }
     });
     if (!res.ok) return null;
-    
     const data = await res.json();
     const rows = data.values || [];
     if (rows.length <= 1) return null;
@@ -367,118 +372,76 @@ async function fetchExistingDataFromSheet(dateStr) {
       return (idx !== -1 && foundRow[idx] !== undefined) ? foundRow[idx] : "";
     };
     
-    HABITS.forEach(h => {
-      const val = getVal(h === "Dagslys/utendørs" ? "Dagslys" : h);
-      entry.habits[h] = val === "1";
-    });
+    HABITS.forEach(h => { entry.habits[h] = getVal(h === "Dagslys/utendørs" ? "Dagslys" : h) === "1"; });
     SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
     DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
     
     entry.alkohol = getVal("Alkohol");
     entry.koffein = getVal("Koffein");
-    
     entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
     entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
     entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
     
-    entry.health.steg = getVal("Steg") !== "" ? Number(getVal("Steg")) : "";
-    entry.health.sovn = getVal("Søvn") !== "" ? Number(getVal("Søvn")) : "";
-    entry.health.hrv = getVal("HRV") !== "" ? Number(getVal("HRV")) : "";
-    entry.health.vekt = getVal("Vekt") !== "" ? Number(getVal("Vekt")) : "";
-    entry.health.kal_brukt = getVal("Kalorier brukt") !== "" ? Number(getVal("Kalorier brukt")) : "";
-    entry.health.kal_balanse = getVal("Kaloribalanse") !== "" ? Number(getVal("Kaloribalanse")) : "";
-    entry.health.co2_snitt = getVal("CO2 snitt") !== "" ? Number(getVal("CO2 snitt")) : "";
-    entry.health.co2_max = getVal("CO2 maks") !== "" ? Number(getVal("CO2 maks")) : "";
+    HEALTH.forEach(h => {
+      const v = getVal(h.label === "Dagslys" ? "Dagslys" : (h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)))));
+      entry.health[h.key] = v !== "" ? Number(v) : "";
+    });
     
     return entry;
   } catch (err) {
-    console.error("Feil ved lesing fra Sheet:", err);
     return null;
   }
 }
 
 async function fetchAllHealthData(dateStr) {
-  if (!googleAccessToken) return;
+  if (!googleAccessToken || isPageLoading) return;
   
+  const targetDateAtCall = dateStr;
   const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
   const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
-  
   const headers = { "Authorization": "Bearer " + googleAccessToken };
-  let apiErrors = [];
-  let foundAnyData = false;
+  
+  let newHealthData = {};
+  let found = false;
 
   try {
-    const stepUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`;
-    const stepRes = await fetch(stepUrl, { headers: headers });
-    if (stepRes.ok) {
-      const data = await stepRes.json();
-      let totalSteps = 0;
-      data.point?.forEach(p => { totalSteps += p.value?.[0]?.intVal || 0; });
-      if (totalSteps > 0) {
-        currentEntry.health.steg = totalSteps;
-        foundAnyData = true;
+    // Steg
+    const sRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`, { headers });
+    if (sRes.ok) {
+      const d = await sRes.json(); let s = 0; d.point?.forEach(p => s += p.value?.[0]?.intVal || 0);
+      if (s > 0) { newHealthData.steg = s; found = true; }
+    }
+    // Kalorier
+    const cRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`, { headers });
+    if (cRes.ok) {
+      const d = await cRes.json(); let c = 0; d.point?.forEach(p => c += p.value?.[0]?.fpVal || 0);
+      if (c > 0) { newHealthData.kal_brukt = Math.round(c); found = true; }
+    }
+    // Vekt
+    const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`, { headers });
+    if (wRes.ok) {
+      const d = await wRes.json();
+      if (d.point?.length > 0) {
+        let w = d.point[d.point.length - 1].value?.[0]?.fpVal || 0;
+        if (w > 0) { newHealthData.vekt = Math.round(w * 10) / 10; found = true; }
       }
-    } else { apiErrors.push("Steg API feil (" + stepRes.status + ")"); }
-
-    const calUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`;
-    const calRes = await fetch(calUrl, { headers: headers });
-    if (calRes.ok) {
-      const data = await calRes.json();
-      let totalCals = 0;
-      data.point?.forEach(p => { totalCals += p.value?.[0]?.fpVal || 0; });
-      if (totalCals > 0) {
-        currentEntry.health.kal_brukt = Math.round(totalCals);
-        foundAnyData = true;
-      }
+    }
+    // Søvn
+    const slRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`, { headers });
+    if (slRes.ok) {
+      const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000);
+      if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; }
     }
 
-    const weightUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`;
-    const weightRes = await fetch(weightUrl, { headers: headers });
-    if (weightRes.ok) {
-      const data = await weightRes.json();
-      if (data.point && data.point.length > 0) {
-        const lastPoint = data.point[data.point.length - 1];
-        const weight = lastPoint.value?.[0]?.fpVal || 0;
-        if (weight > 0) {
-          currentEntry.health.vekt = Math.round(weight * 10) / 10;
-          foundAnyData = true;
-        }
-      }
+    // Lås oppdateringen til nøyaktig den datoen kallet ble gjort for
+    if (found && targetDateAtCall === currentDate && !isPageLoading) {
+      Object.assign(currentEntry.health, newHealthData);
+      renderHealth();
+      await doSyncToSheet(currentDate, currentEntry);
+      try { await window.storage.set("entry:" + currentDate, JSON.stringify(currentEntry)); } catch(e){}
     }
-
-    const sleepUrl = `https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`;
-    const sleepRes = await fetch(sleepUrl, { headers: headers });
-    if (sleepRes.ok) {
-      const data = await sleepRes.json();
-      let totalSleepMillis = 0;
-      data.point?.forEach(p => {
-        const startMs = Number(BigInt(p.startTimeNanos) / 1000000n);
-        const endMs = Number(BigInt(p.endTimeNanos) / 1000000n);
-        totalSleepMillis += (endMs - startMs);
-      });
-      if (totalSleepMillis > 0) {
-        currentEntry.health.sovn = Math.round((totalSleepMillis / (1000 * 60 * 60)) * 10) / 10;
-        foundAnyData = true;
-      }
-    }
-    
-    if (!foundAnyData && apiErrors.length === 0) {
-      showDebugError("Tilkobling OK, men fant ingen helsedata lagret i din Google-skykonto for denne datoen.");
-    } else if (apiErrors.length > 0) {
-      showDebugError("Noen API-kall feilet: " + apiErrors.join(" | "));
-    }
-    
     setGoogleStatus("tilkoblet ✓");
-    renderHealth(); // Tegn de nye tallene på skjermen
-    
-    // Viktig: Vi lagrer KUN hvis vi faktisk fant nye helsedata, for å unngå å overskrive med ingenting
-    if(foundAnyData) {
-      await doSyncToSheet(dateStr, currentEntry);
-      try { await window.storage.set("entry:" + dateStr, JSON.stringify(currentEntry)); } catch(e){}
-    }
   } catch (err) {
-    console.error(err);
-    showDebugError("Systemfeil under henting: " + err.message);
     setGoogleStatus("henting feilet", true);
   }
 }
@@ -487,22 +450,11 @@ function entryToRow(dateStr, entry){
   const row = new Array(SHEET_HEADERS.length).fill("");
   row[SHEET_HEADERS.indexOf("Dato")] = "'" + dateStr;
   row[SHEET_HEADERS.indexOf("Dag")] = norskDag(dateStr);
-  row[SHEET_HEADERS.indexOf("Trene styrke")] = entry.habits["Trene styrke"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Trene kardio")] = entry.habits["Trene kardio"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Lese")] = entry.habits["Lese"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Gå til jobb")] = entry.habits["Gå til jobb"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Pornobruk")] = entry.habits["Pornobruk"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Dagslys")] = entry.habits["Dagslys/utendørs"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Vitamin C")] = entry.supps["Vitamin C"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Vitamin D")] = entry.supps["Vitamin D"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Tran")] = entry.supps["Tran"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Ultraprosessert mat")] = entry.diet["Ultraprosessert mat"] ? "1" : "0";
-  row[SHEET_HEADERS.indexOf("Sukker")] = entry.diet["Sukker"] ? "1" : "0";
-  
-  // GJØR DETTE ROBUST: Unngå å tvinge tomme felter til "0" hvis de er tomme strenger
+  HABITS.forEach(h => { row[SHEET_HEADERS.indexOf(h === "Dagslys/utendørs" ? "Dagslys" : h)] = entry.habits[h] ? "1" : "0"; });
+  SUPPS.forEach(s => { row[SHEET_HEADERS.indexOf(s)] = entry.supps[s] ? "1" : "0"; });
+  DIET.forEach(d => { row[SHEET_HEADERS.indexOf(d)] = entry.diet[d] ? "1" : "0"; });
   row[SHEET_HEADERS.indexOf("Alkohol")] = (entry.alkohol !== "" && entry.alkohol != null) ? entry.alkohol : "";
   row[SHEET_HEADERS.indexOf("Koffein")] = (entry.koffein !== "" && entry.koffein != null) ? entry.koffein : "";
-  
   row[SHEET_HEADERS.indexOf("Brainfog")] = entry.scales.brainfog ?? "";
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
@@ -544,13 +496,6 @@ async function doSyncToSheet(dateStr, entry){
   }catch(err) { console.error(err); }
 }
 
-initGoogleAuth();
-let currentDate = new Date().toISOString().slice(0,10);
-let currentEntry = emptyEntry();
-
-function emptyEntry(){
-  return { habits:{}, supps:{}, diet:{}, alkohol:"", koffein:"", scales:{brainfog:5, energi:5, stress:5}, health:{} };
-}
 function pad(n){return n<10?'0'+n:n;}
 function shiftDate(dateStr, delta){
   const d = new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+delta);
@@ -564,7 +509,12 @@ function renderTags(containerId, list, storeKey){
   list.forEach(name=>{
     const btn = document.createElement("button");
     btn.className = "tag" + (currentEntry[storeKey][name] ? " on" : ""); btn.textContent = name;
-    btn.onclick = ()=>{ currentEntry[storeKey][name] = !currentEntry[storeKey][name]; btn.classList.toggle("on"); saveEntry(); };
+    btn.onclick = ()=>{ 
+      if(isPageLoading) return;
+      currentEntry[storeKey][name] = !currentEntry[storeKey][name]; 
+      btn.classList.toggle("on"); 
+      triggerSave(); 
+    };
     c.appendChild(btn);
   });
 }
@@ -576,7 +526,7 @@ function renderScales(){
     row.innerHTML = `<label>${s.label}</label><div class="scale"><input type="range" min="1" max="9" step="1" value="${currentEntry.scales[s.key] ?? 5}" data-key="${s.key}"><span class="val">${currentEntry.scales[s.key] ?? 5}</span></div>`;
     const input = row.querySelector("input"); const val = row.querySelector(".val");
     input.oninput = ()=>{ val.textContent = input.value; currentEntry.scales[s.key] = parseInt(input.value,10); };
-    input.onchange = ()=>{ saveEntry(); };
+    input.onchange = ()=>{ triggerSave(); };
     c.appendChild(row);
   });
 }
@@ -587,7 +537,11 @@ function renderHealth(){
     const f = document.createElement("div"); f.className = "field";
     f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" data-key="${h.key}" value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
     const input = f.querySelector("input");
-    input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; saveEntry(); };
+    input.oninput = ()=>{ 
+      if(isPageLoading) return;
+      currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; 
+      triggerSave(); 
+    };
     c.appendChild(f);
   });
 }
@@ -596,36 +550,37 @@ function renderIntake(){
   document.getElementById("alkohol").value = currentEntry.alkohol;
   document.getElementById("koffein").value = currentEntry.koffein;
 }
-document.getElementById("alkohol").oninput = (e)=>{ currentEntry.alkohol = e.target.value; saveEntry(); };
-document.getElementById("koffein").oninput = (e)=>{ currentEntry.koffein = e.target.value; saveEntry(); };
+document.getElementById("alkohol").oninput = (e)=>{ if(!isPageLoading){ currentEntry.alkohol = e.target.value; triggerSave(); } };
+document.getElementById("koffein").oninput = (e)=>{ if(!isPageLoading){ currentEntry.koffein = e.target.value; triggerSave(); } };
 
 function renderAll(){ renderTags("habitTags", HABITS, "habits"); renderTags("suppTags", SUPPS, "supps"); renderTags("dietTags", DIET, "diet"); renderScales(); renderHealth(); renderIntake(); }
 
-function saveEntry(){ 
-  if (isInitialLoadingFromSheet) return;
-  document.getElementById("saveStatus").textContent = "lagrer…"; 
-  clearTimeout(saveTimeout); 
-  saveTimeout = setTimeout(()=> attemptSave(true), 400); 
-}
-
-async function forceSaveImmediately() {
-  if (isInitialLoadingFromSheet) return;
+function triggerSave(){
+  if (isPageLoading) return;
+  document.getElementById("saveStatus").textContent = "lagrer…";
   clearTimeout(saveTimeout);
-  await doSyncToSheet(currentDate, currentEntry);
-  try { window.storage.set("entry:" + currentDate, JSON.stringify(currentEntry)); } catch(e) {}
+  saveTimeout = setTimeout(executeSave, 400);
 }
 
-async function attemptSave(allowRetry){
-  if(googleAccessToken && spreadsheetId) await syncToSheet(currentDate, currentEntry);
+async function executeSave(){
+  if (isPageLoading) return;
+  const snapshotDate = currentDate;
+  const snapshotEntry = JSON.parse(JSON.stringify(currentEntry));
+  
+  if(googleAccessToken && spreadsheetId) await syncToSheet(snapshotDate, snapshotEntry);
   try{
-    await window.storage.set("entry:"+currentDate, JSON.stringify(currentEntry));
-    document.getElementById("saveStatus").textContent = "lagret"; renderHistory();
-  }catch(err){ if(allowRetry) setTimeout(()=> attemptSave(false), 1200); }
+    await window.storage.set("entry:"+snapshotDate, JSON.stringify(snapshotEntry));
+    if (snapshotDate === currentDate) {
+      document.getElementById("saveStatus").textContent = "lagret";
+      renderHistory();
+    }
+  }catch(err){}
 }
 
 async function loadEntry(dateStr) {
+  isPageLoading = true; 
+  clearTimeout(saveTimeout);
   document.getElementById("saveStatus").textContent = "laster…";
-  isInitialLoadingFromSheet = true;
   
   let dataFromSheet = null;
   if (googleAccessToken && spreadsheetId) {
@@ -646,22 +601,29 @@ async function loadEntry(dateStr) {
   }
   
   renderAll();
-  isInitialLoadingFromSheet = false;
+  isPageLoading = false; 
   
-  // Asynkron henting skjer KUN hvis dagen var fullstendig tom i arket fra før
   if (!dataFromSheet && googleAccessToken) {
     await fetchAllHealthData(dateStr);
   }
 }
 
 async function handleDateChange(newDate) {
-  // 1. Tving frem fullført lagring av den gamle datoen først
-  await forceSaveImmediately();
+  clearTimeout(saveTimeout);
+  isPageLoading = true;
+  document.getElementById("saveStatus").textContent = "bytter dag…";
   
-  // 2. Bytt dato og last inn
+  // 1. Lagre gårsdagens tilstand HELT synkront med øyeblikksbilde før vi flytter pekeren
+  const oldDate = currentDate;
+  const oldEntry = JSON.parse(JSON.stringify(currentEntry));
+  if(googleAccessToken && spreadsheetId) await doSyncToSheet(oldDate, oldEntry);
+  try { await window.storage.set("entry:" + oldDate, JSON.stringify(oldEntry)); } catch(e){}
+  
+  // 2. Flytt pekeren til ny dato og hent data
   currentDate = newDate;
   document.getElementById("dateInput").value = currentDate;
   updateDateDisplay();
+  
   await loadEntry(currentDate);
   await renderHistory();
 }
@@ -679,15 +641,15 @@ async function renderHistory(){
   }
   el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
   el.querySelectorAll(".rowdate").forEach(td=>{
-    td.onclick = async ()=>{ await handleDateChange(td.dataset.date); };
+    td.onclick = async ()=>{ if(!isPageLoading) await handleDateChange(td.dataset.date); };
   });
 }
 
 document.getElementById("dateInput").value = currentDate; updateDateDisplay();
-document.getElementById("dateInput").onchange = async (e)=>{ await handleDateChange(e.target.value); };
+document.getElementById("dateInput").onchange = async (e)=>{ if(!isPageLoading) await handleDateChange(e.target.value); };
 document.getElementById("dateDisplay").onclick = ()=>{ const input = document.getElementById("dateInput"); if(input.showPicker){ input.showPicker(); } else { input.style.display="inline-block"; input.focus(); } };
-document.getElementById("prevDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, -1)); };
-document.getElementById("nextDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, 1)); };
+document.getElementById("prevDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, -1)); };
+document.getElementById("nextDay").onclick = async ()=>{ if(!isPageLoading) await handleDateChange(shiftDate(currentDate, 1)); };
 
 loadEntry(currentDate).then(renderHistory);
 </script>
