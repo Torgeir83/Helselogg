@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.2</title>
+<title>Feltjournal v1.3</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -117,13 +117,26 @@
   table.log .rowdate{cursor:pointer; color:var(--moss-dark); font-weight:600;}
   table.log .rowdate:hover{text-decoration:underline;}
   .empty{color:#a39d8c; font-size:13px; font-style:italic; padding:6px 0;}
+  
+  .sync-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+    padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .sync-info { font-family: var(--sans); font-size: 13px; color: var(--ink); }
+  .sync-info span { font-family: var(--mono); font-weight: 600; }
+  .btn-small {
+    background: none; border: 1px solid var(--moss); color: var(--moss);
+    padding: 6px 12px; border-radius: 3px; cursor: pointer; font-family: var(--sans); font-size: 12px;
+  }
+  .btn-small:hover { background: var(--moss); color: #fff; }
+  .error-msg { font-family: var(--mono); font-size: 12px; color: var(--clay); margin-top: 6px; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.2</span></h1>
+    <h1>Feltjournal<span>v1.3</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -189,6 +202,7 @@
   <section class="block">
     <h2>Helsedata &amp; CO2</h2>
     <div class="healthgrid" id="healthFields"></div>
+    <div class="hint">Steg, søvn, vekt og kalorier synkroniseres fra Google Fit.</div>
   </section>
 
   <div class="history">
@@ -310,6 +324,7 @@ async function fetchExistingDataFromSheet(dateStr) {
   } catch (err) { return null; }
 }
 
+// RETTET I v1.3: Hente-logikken for Google Fit er koblet fullstendig opp igjen
 async function fetchAllHealthData(dateStr) {
   if (!googleAccessToken) return;
   const targetDateAtCall = dateStr;
@@ -317,11 +332,31 @@ async function fetchAllHealthData(dateStr) {
   const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
   const headers = { "Authorization": "Bearer " + googleAccessToken };
   let newHealthData = {}; let found = false;
+  
   try {
+    // 1. Hent skritt
     const sRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`, { headers });
     if (sRes.ok) { const d = await sRes.json(); let s = 0; d.point?.forEach(p => s += p.value?.[0]?.intVal || 0); if (s > 0) { newHealthData.steg = s; found = true; } }
-    if (found && targetDateAtCall === currentDate) { Object.assign(currentEntry.health, newHealthData); renderHealth(); await executeSaveDirectly(); }
-  } catch (err) {}
+    
+    // 2. Hent kalorier brukt
+    const cRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`, { headers });
+    if (cRes.ok) { const d = await cRes.json(); let c = 0; d.point?.forEach(p => c += p.value?.[0]?.fpVal || 0); if (c > 0) { newHealthData.kal_brukt = Math.round(c); found = true; } }
+    
+    // 3. Hent vekt
+    const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`, { headers });
+    if (wRes.ok) { const d = await wRes.json(); if (d.point?.length > 0) { let w = d.point[d.point.length - 1].value?.[0]?.fpVal || 0; if (w > 0) { newHealthData.vekt = Math.round(w * 10) / 10; found = true; } } }
+    
+    // 4. Hent søvn
+    const slRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`, { headers });
+    if (slRes.ok) { const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000); if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; } }
+
+    if (found && targetDateAtCall === currentDate) {
+      Object.assign(currentEntry.health, newHealthData);
+      renderHealth();
+      await executeSaveDirectly();
+    }
+    setGoogleStatus("tilkoblet ✓");
+  } catch (err) { setGoogleStatus("henting feilet", true); }
 }
 
 function entryToRow(dateStr, entry){
@@ -411,7 +446,6 @@ function triggerDebouncedSave(){
 async function executeSaveDirectly(){
   const snapshotDate = currentDate; const snapshotEntry = JSON.parse(JSON.stringify(currentEntry));
   if(googleAccessToken && spreadsheetId) await syncToSheet(snapshotDate, snapshotEntry);
-  // RETTET I v1.2: Bruker utelukkende localStorage som fungerer overalt, helt uten avhengigheter
   localStorage.setItem("entry:" + snapshotDate, JSON.stringify(snapshotEntry));
   if (snapshotDate === currentDate) { document.getElementById("saveStatus").textContent = "lagret"; renderHistory(); }
 }
@@ -439,6 +473,11 @@ async function loadEntry(dateStr) {
   }
   
   renderAll();
+  
+  // Hent automatisk hvis det er koblet til sky og ingen lokale data finnes
+  if (!dataFromSheet && googleAccessToken) {
+    await fetchAllHealthData(dateStr);
+  }
 }
 
 async function handleDateChange(newDate) {
@@ -484,7 +523,6 @@ document.getElementById("dateInput").onchange = async (e)=>{ if(e.target.value >
 document.getElementById("prevDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, -1)); };
 document.getElementById("nextDay").onclick = async ()=>{ if(currentDate < todayStr) await handleDateChange(shiftDate(currentDate, 1)); };
 
-// Start oppsett umiddelbart
 loadEntry(currentDate);
 renderHistory();
 </script>
