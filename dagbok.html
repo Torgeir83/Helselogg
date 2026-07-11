@@ -118,6 +118,10 @@
   .save-note{
     font-family:var(--mono); font-size:10.5px; color:#a39d8c; text-align:right; margin-top:-8px; margin-bottom:14px;
   }
+  .error-box{
+    font-family:var(--mono); font-size:12px; color:var(--clay); background:rgba(168,86,46,0.1); 
+    padding:8px 12px; border-radius:3px; margin-top:8px; display:none; border:1px solid rgba(168,86,46,0.2);
+  }
 </style>
 </head>
 <body>
@@ -140,6 +144,7 @@
     <button id="googleConnectBtn" style="width:auto; padding:5px 12px; font-family:var(--sans); font-size:12px;">Koble til Google-konto</button>
     <span class="status" id="googleStatus">ikke tilkoblet</span>
   </div>
+  <div class="error-box" id="debugError"></div>
 
   <section class="block">
     <h2>Vaner</h2>
@@ -236,6 +241,16 @@ let googleAccessToken = null;
 let tokenClient = null;
 let spreadsheetId = null;
 
+function showDebugError(msg) {
+  const box = document.getElementById("debugError");
+  if(msg) {
+    box.textContent = "Helse-API Info: " + msg;
+    box.style.display = "block";
+  } else {
+    box.style.display = "none";
+  }
+}
+
 function initGoogleAuth(){
   if(!window.google || !google.accounts){ setTimeout(initGoogleAuth, 300); return; }
   tokenClient = google.accounts.oauth2.initTokenClient({
@@ -244,11 +259,13 @@ function initGoogleAuth(){
     callback: async (resp)=>{
       if(resp.error){
         document.getElementById("googleStatus").textContent = "innlogging feilet";
+        showDebugError(resp.error_description || resp.error);
         return;
       }
       googleAccessToken = resp.access_token;
       document.getElementById("googleStatus").textContent = "tilkoblet";
       document.getElementById("googleConnectBtn").textContent = "Tilkoblet ✓";
+      showDebugError(null);
       await ensureSpreadsheet();
       await fetchAllHealthData(currentDate);
     }
@@ -313,6 +330,7 @@ async function fetchAllHealthData(dateStr) {
   const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
   
   const headers = { "Authorization": "Bearer " + googleAccessToken };
+  let errorMessages = [];
 
   try {
     // 1. STEG
@@ -327,6 +345,8 @@ async function fetchAllHealthData(dateStr) {
         const input = document.querySelector('input[data-key="steg"]');
         if (input) input.value = totalSteps;
       }
+    } else {
+      errorMessages.push("Steg-API ga status " + stepRes.status);
     }
 
     // 2. KALORIER BRUKT
@@ -380,9 +400,13 @@ async function fetchAllHealthData(dateStr) {
       }
     }
     
+    if(errorMessages.length > 0) {
+      showDebugError(errorMessages.join(" | "));
+    }
     saveEntry();
   } catch (err) {
     console.error("Feil under henting av helsedata:", err);
+    showDebugError(err.message);
   }
 }
 
