@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.6</title>
+<title>Feltjournal v1.7</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -86,12 +86,22 @@
   .field label{
     display:block; font-size:12px; color:#6b6656; margin-bottom:5px; font-family:var(--sans);
   }
-  .field .num-row{display:flex; align-items:center; gap:8px;}
-  .field input[type=number]{
-    width:100%; font-family:var(--mono); font-size:15px; border:1px solid var(--line);
-    background:#fff; padding:8px 10px; border-radius:3px; color:var(--ink);
+  
+  /* NYTT I v1.7: Styling for inntaksknapper */
+  .intake-buttons {
+    display: flex; gap: 6px; margin-top: 4px;
   }
-  .unit{font-family:var(--mono); font-size:11px; color:#8b8578; white-space:nowrap;}
+  .intake-btn {
+    flex: 1; font-family: var(--mono); font-size: 14px; padding: 8px 0;
+    background: transparent; border: 1px solid var(--line); border-radius: 4px;
+    color: var(--ink); cursor: pointer; transition: all 0.1s ease; text-align: center;
+  }
+  .intake-btn.active {
+    background: var(--moss); border-color: var(--moss); color: #fff; font-weight: 600;
+  }
+  .intake-btn:hover:not(.active) {
+    border-color: var(--moss);
+  }
 
   .scale{display:flex; align-items:center; gap:10px;}
   .scale input[type=range]{flex:1; accent-color:var(--clay);}
@@ -101,7 +111,6 @@
 
   .healthgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
   @media(max-width:520px){.healthgrid{grid-template-columns:1fr;}}
-  .healthgrid .hint{font-size:10.5px; color:#a39d8c; margin-top:3px;}
 
   .history{margin-top:26px;}
   .history h2{
@@ -129,14 +138,13 @@
     padding: 6px 12px; border-radius: 3px; cursor: pointer; font-family: var(--sans); font-size: 12px;
   }
   .btn-small:hover { background: var(--moss); color: #fff; }
-  .error-msg { font-family: var(--mono); font-size: 12px; color: var(--clay); margin-top: 6px; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.6</span></h1>
+    <h1>Feltjournal<span>v1.7</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -151,7 +159,6 @@
   <div class="sync-box">
     <div class="sync-info">
       Google Status: <span id="googleStatus">venter på bibliotek...</span>
-      <div class="error-msg" id="debugError" style="display:none;"></div>
     </div>
     <div>
       <button id="googleConnectBtn" class="btn-small" style="border-color: var(--line); color: var(--ink);">Logg inn med Google</button>
@@ -179,17 +186,11 @@
     <div class="grid2">
       <div class="field">
         <label>Alkohol (enheter)</label>
-        <div class="num-row">
-          <input type="number" min="0" step="1" id="alkohol">
-          <span class="unit">enh.</span>
-        </div>
+        <div class="intake-buttons" id="alkoholButtons"></div>
       </div>
       <div class="field">
         <label>Koffein (kopper)</label>
-        <div class="num-row">
-          <input type="number" min="0" step="1" id="koffein">
-          <span class="unit">kopper</span>
-        </div>
+        <div class="intake-buttons" id="koffeinButtons"></div>
       </div>
     </div>
   </section>
@@ -202,11 +203,10 @@
   <section class="block">
     <h2>Helsedata &amp; CO2</h2>
     <div class="healthgrid" id="healthFields"></div>
-    <div class="hint">Steg, søvn, vekt og kalorier synkroniseres fra Google Fit.</div>
   </section>
 
   <div class="history">
-    <h2>Siste oppføringer</h2>
+    <h2>Siste 10 oppføringer</h2>
     <div id="historyTable"></div>
   </div>
 
@@ -231,6 +231,8 @@ const HEALTH = [
   {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm"},
   {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
 ];
+
+const INTAKE_OPTIONS = ["0", "1", "2", "3", "4+"];
 
 const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets " +
@@ -293,7 +295,6 @@ const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
 async function fetchExistingDataFromSheet(dateStr) {
   if (!googleAccessToken || !spreadsheetId) return null;
   try {
-    // RETTET I v1.6: Byttet ut www.googleapis.com med korrekt sheets.googleapis.com
     const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:Z`, {
       headers: { "Authorization": "Bearer " + googleAccessToken }
     });
@@ -378,18 +379,15 @@ async function syncToSheet(dateStr, entry){ syncQueue = syncQueue.then(()=> doSy
 async function doSyncToSheet(dateStr, entry){
   if(!googleAccessToken || !spreadsheetId) return;
   try{
-    // RETTET I v1.6: Byttet ut www.googleapis.com med korrekt sheets.googleapis.com
     const getRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:A`, { headers:{ "Authorization":"Bearer "+googleAccessToken } });
     const getData = await getRes.json(); const rows = getData.values || [];
     let rowIndex = rows.findIndex(r => r[0] === dateStr); const row = entryToRow(dateStr, entry);
     if(rowIndex > 0 || (rowIndex === 0 && rows[0] && rows[0][0] === dateStr)){
       const sheetRowNum = rowIndex + 1;
-      // RETTET I v1.6: Byttet ut med sheets.googleapis.com
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${String.fromCharCode(65+SHEET_HEADERS.length-1)}${sheetRowNum}?valueInputOption=USER_ENTERED`, {
         method:"PUT", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, body: JSON.stringify({ values:[row] })
       });
     } else {
-      // RETTET I v1.6: Byttet ut med sheets.googleapis.com
       await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
         method:"POST", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, body: JSON.stringify({ values:[row] })
       });
@@ -430,14 +428,37 @@ function renderHealth(){
   });
 }
 
-function renderIntake(){
-  document.getElementById("alkohol").value = currentEntry.alkohol || "";
-  document.getElementById("koffein").value = currentEntry.koffein || "";
+/* NYTT I v1.7: Logikk for inntaksknapper i stedet for inputfelt */
+function renderIntakeButtons(containerId, storeKey) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = "";
+  INTAKE_OPTIONS.forEach(opt => {
+    const btn = document.createElement("button");
+    btn.className = "intake-btn" + (currentEntry[storeKey] === opt ? " active" : "");
+    btn.textContent = opt;
+    btn.onclick = () => {
+      currentEntry[storeKey] = opt;
+      container.querySelectorAll(".intake-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      triggerDebouncedSave();
+    };
+    container.appendChild(btn);
+  });
 }
-document.getElementById("alkohol").oninput = (e)=>{ currentEntry.alkohol = e.target.value; triggerDebouncedSave(); };
-document.getElementById("koffein").oninput = (e)=>{ currentEntry.koffein = e.target.value; triggerDebouncedSave(); };
 
-function renderAll(){ renderTags("habitTags", HABITS, "habits"); renderTags("suppTags", SUPPS, "supps"); renderTags("dietTags", DIET, "diet"); renderScales(); renderHealth(); renderIntake(); }
+function renderIntake(){
+  renderIntakeButtons("alkoholButtons", "alkohol");
+  renderIntakeButtons("koffeinButtons", "koffein");
+}
+
+function renderAll(){ 
+  renderTags("habitTags", HABITS, "habits"); 
+  renderTags("suppTags", SUPPS, "supps"); 
+  renderTags("dietTags", DIET, "diet"); 
+  renderScales(); 
+  renderHealth(); 
+  renderIntake(); 
+}
 
 function triggerDebouncedSave(){
   document.getElementById("saveStatus").textContent = "endret…";
@@ -493,6 +514,7 @@ async function handleDateChange(newDate) {
   renderHistory();
 }
 
+/* NYTT I v1.7: Begrenset listen strikt til de 10 siste oppføringene */
 function renderHistory(){
   const el = document.getElementById("historyTable"); 
   const keys = [];
@@ -502,7 +524,9 @@ function renderHistory(){
   }
   if(keys.length===0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
   keys.sort().reverse(); const rows = [];
-  for(const k of keys.slice(0,14)){
+  
+  // Henter nøyaktig de 10 øverste (siste) elementene
+  for(const k of keys.slice(0,10)){
     const e = JSON.parse(localStorage.getItem(k)); const date = k.replace("entry:","");
     rows.push(`<tr><td class="rowdate" data-date="${date}">${date}</td><td>${Object.values(e.habits||{}).filter(Boolean).length}/${HABITS.length}</td><td>${e.scales?.brainfog ?? "–"}</td><td>${e.health?.co2_snitt || "–"}</td></tr>`);
   }
