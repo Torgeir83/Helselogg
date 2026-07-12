@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.9.3</title>
+<title>Feltjournal v1.9.4</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -160,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.9.3</span></h1>
+    <h1>Feltjournal<span>v1.9.4</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -430,7 +430,7 @@ function entryToRow(dateStr, entry){
 let syncQueue = Promise.resolve();
 async function syncToSheet(dateStr, entry){ syncQueue = syncQueue.then(()=> doSyncToSheet(dateStr, entry)); return syncQueue; }
 
-// RETTET I v1.9.3: Fikset range-parsingen (Logg!A -> Logg!A:Z) slik at Google Sheets forstår spennet fullstendig
+// TOTALRENOVERT I v1.9.4: Dropper append helt. Bruker ren PUT mot nøyaktig kalkulert radnummer.
 async function doSyncToSheet(dateStr, entry){
   if(!googleAccessToken || !spreadsheetId) return;
   try{
@@ -440,22 +440,20 @@ async function doSyncToSheet(dateStr, entry){
     const getData = await getRes.json(); const rows = getData.values || [];
     let rowIndex = rows.findIndex(r => r[0] === dateStr); const row = entryToRow(dateStr, entry);
     
-    let targetUrl = "";
-    let method = "POST";
-    const endLetter = String.fromCharCode(65 + SHEET_HEADERS.length - 1); // Dynamisk kalkulering av siste kolonnebokstav (Z)
-    
+    let sheetRowNum;
     if(rowIndex >= 0 && rows[rowIndex] && rows[rowIndex][0] === dateStr){
-      const sheetRowNum = rowIndex + 1;
-      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${endLetter}${sheetRowNum}?valueInputOption=USER_ENTERED`;
-      method = "PUT";
+      // Datoen finnes fra før -> overskriv raden
+      sheetRowNum = rowIndex + 1;
     } else {
-      // RETTET HER: Endret fra Logg!A til Logg!A:Z for append-forespørsler
-      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:${endLetter}?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
-      method = "POST";
+      // Datoen er helt ny -> skriv direkte til neste tomme linje i arket
+      sheetRowNum = rows.length + 1;
     }
 
+    const endLetter = String.fromCharCode(65 + SHEET_HEADERS.length - 1); 
+    const targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${endLetter}${sheetRowNum}?valueInputOption=USER_ENTERED`;
+
     const writeRes = await fetch(targetUrl, {
-      method: method, 
+      method: "PUT", 
       headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, 
       body: JSON.stringify({ values:[row] })
     });
