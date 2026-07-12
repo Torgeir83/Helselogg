@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.9.2</title>
+<title>Feltjournal v1.9.3</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -160,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.9.2</span></h1>
+    <h1>Feltjournal<span>v1.9.3</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -420,7 +420,6 @@ function entryToRow(dateStr, entry){
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
   
-  // Merk: Sikrer at alle helsedata mappes nøyaktig mot arket (HRV-indeks forblir tom)
   HEALTH.forEach(h => { 
     const label = h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)));
     row[SHEET_HEADERS.indexOf(label)] = entry.health[h.key] || ""; 
@@ -431,7 +430,7 @@ function entryToRow(dateStr, entry){
 let syncQueue = Promise.resolve();
 async function syncToSheet(dateStr, entry){ syncQueue = syncQueue.then(()=> doSyncToSheet(dateStr, entry)); return syncQueue; }
 
-// FORBEDRET I v1.9.2: Lagt til robust feilhåndtering med synlige feilmeldinger hvis skriving feiler
+// RETTET I v1.9.3: Fikset range-parsingen (Logg!A -> Logg!A:Z) slik at Google Sheets forstår spennet fullstendig
 async function doSyncToSheet(dateStr, entry){
   if(!googleAccessToken || !spreadsheetId) return;
   try{
@@ -443,13 +442,15 @@ async function doSyncToSheet(dateStr, entry){
     
     let targetUrl = "";
     let method = "POST";
+    const endLetter = String.fromCharCode(65 + SHEET_HEADERS.length - 1); // Dynamisk kalkulering av siste kolonnebokstav (Z)
     
-    if(rowIndex > 0 || (rowIndex === 0 && rows[0] && rows[0][0] === dateStr)){
+    if(rowIndex >= 0 && rows[rowIndex] && rows[rowIndex][0] === dateStr){
       const sheetRowNum = rowIndex + 1;
-      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${String.fromCharCode(65+SHEET_HEADERS.length-1)}${sheetRowNum}?valueInputOption=USER_ENTERED`;
+      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${endLetter}${sheetRowNum}?valueInputOption=USER_ENTERED`;
       method = "PUT";
     } else {
-      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      // RETTET HER: Endret fra Logg!A til Logg!A:Z for append-forespørsler
+      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:${endLetter}?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
       method = "POST";
     }
 
