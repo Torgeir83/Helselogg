@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.9.5</title>
+<title>Feltjournal v1.9.6</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -160,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.9.5</span></h1>
+    <h1>Feltjournal<span>v1.9.6</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -341,7 +341,6 @@ async function fetchExistingDataFromSheet(dateStr) {
     SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
     DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
     
-    // NYTT I v1.9.5: Hvis verdien i arket er "4", mapper vi den tilbake til "4+" på knappen i grensesnittet
     const alkVal = getVal("Alkohol");
     entry.alkohol = alkVal === "4" ? "4+" : alkVal;
     const koffVal = getVal("Koffein");
@@ -358,15 +357,13 @@ async function fetchExistingDataFromSheet(dateStr) {
   } catch (err) { return null; }
 }
 
+// RETTET I v1.9.6: Går tilbake til døgnsynkronisering (feilfri v1.6-standard) og legger til beskyttelsessperre mot overskriving
 async function fetchAllHealthData(dateStr) {
   if (!googleAccessToken) return;
   const targetDateAtCall = dateStr;
   
   const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
   const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
-  
-  const lookbackDate = new Date(new Date(dateStr + "T00:00:00").getTime() - (30 * 24 * 60 * 60 * 1000));
-  const lookbackStartNano = BigInt(lookbackDate.getTime()) * 1000000n;
   
   const headers = { "Authorization": "Bearer " + googleAccessToken };
   let newHealthData = {}; let found = false;
@@ -381,35 +378,59 @@ async function fetchAllHealthData(dateStr) {
     const slRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`, { headers });
     if (slRes.ok) { const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000); if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; } }
 
-    const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${lookbackStartNano}-${endNano}`, { headers });
+    const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`, { headers });
     if (wRes.ok) { 
       const d = await wRes.json(); 
       if (d.point?.length > 0) { 
-        const lastPoint = d.point[d.point.length - 1];
-        let w = lastPoint.value?.[0]?.fpVal || 0; 
-        if (w > 0) { 
-          newHealthData.vekt = Math.round(w * 10) / 10; 
-          found = true; 
-          
-          const measuredMs = Number(BigInt(lastPoint.endTimeNanos) / 1000000n);
-          const measuredDateStr = new Date(measuredMs).toISOString().slice(0,10);
-          if (measuredDateStr !== dateStr) {
-            const [_, m, day] = measuredDateStr.split("-");
-            weightDateLabel = ` (${day}.${m})`;
-          } else {
-            weightDateLabel = "";
-          }
-        } 
+        let w = d.point[d.point.length - 1].value?.[0]?.fpVal || 0; 
+        if (w > 0) { newHealthData.vekt = Math.round(w * 10) / 10; found = true; weightDateLabel = ""; } 
       } 
     }
 
+    // NYTT I v1.9.6: Lokal historikk-fallback for vekt hvis dagens måling mangler
+    if (!newHealthData.vekt) {
+      const fallback = findLastRegisteredWeight(dateStr);
+      if (fallback) {
+        newHealthData.vekt = fallback.weight;
+        weightDateLabel = fallback.label;
+        found = true;
+      }
+    }
+
     if (found && targetDateAtCall === currentDate) {
-      Object.assign(currentEntry.health, newHealthData);
+      // Sikkerhetssperre: Oppdaterer kun felt som faktisk har fått nye, reelle verdier
+      for (const k in newHealthData) {
+        if (newHealthData[k] !== undefined && newHealthData[k] !== "") {
+          currentEntry.health[k] = newHealthData[k];
+        }
+      }
       renderHealth();
       await executeSaveDirectly();
     }
     setGoogleStatus("tilkoblet ✓");
   } catch (err) { setGoogleStatus("henting feilet", true); }
+}
+
+// NYTT I v1.9.6: Hjelpefunksjon som leter i LocalStorage etter forrige vektmåling
+function findLastRegisteredWeight(beforeDateStr) {
+  const keys = [];
+  for(let i=0; i<localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if(k.startsWith("entry:")) keys.push(k);
+  }
+  keys.sort().reverse();
+  
+  for(const k of keys) {
+    const date = k.replace("entry:", "");
+    if (date < beforeDateStr) {
+      const e = JSON.parse(localStorage.getItem(k));
+      if (e?.health?.vekt) {
+        const [_, m, d] = date.split("-");
+        return { weight: e.health.vekt, label: ` (${d}.${m})` };
+      }
+    }
+  }
+  return null;
 }
 
 function entryToRow(dateStr, entry){
@@ -420,10 +441,8 @@ function entryToRow(dateStr, entry){
   SUPPS.forEach(s => { row[SHEET_HEADERS.indexOf(s)] = entry.supps[s] ? "1" : "0"; });
   DIET.forEach(d => { row[SHEET_HEADERS.indexOf(d)] = entry.diet[d] ? "1" : "0"; });
   
-  // RETTET I v1.9.5: Konverterer "4+" til en ren "4" når dataene pakkes for Google Sheets
   row[SHEET_HEADERS.indexOf("Alkohol")] = entry.alkohol === "4+" ? "4" : (entry.alkohol || "");
   row[SHEET_HEADERS.indexOf("Koffein")] = entry.koffein === "4+" ? "4" : (entry.koffein || "");
-  
   row[SHEET_HEADERS.indexOf("Brainfog")] = entry.scales.brainfog ?? "";
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
@@ -583,6 +602,15 @@ async function loadEntry(dateStr) {
     document.getElementById("saveStatus").textContent = "klar";
   }
   
+  // Sjekk om vekten skal ha en lokal historikk-label ved innlasting
+  if (!currentEntry.health.vekt || weightDateLabel === "") {
+    const fallback = findLastRegisteredWeight(dateStr);
+    if (fallback && !currentEntry.health.vekt) {
+      currentEntry.health.vekt = fallback.weight;
+      weightDateLabel = fallback.label;
+    }
+  }
+
   renderAll();
   
   if (!sheetData && googleAccessToken) {
