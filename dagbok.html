@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.8</title>
+<title>Feltjournal v1.9</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -111,6 +111,24 @@
   .healthgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
   @media(max-width:520px){.healthgrid{grid-template-columns:1fr;}}
 
+  /* NYTT I v1.9: Styling for låste/automatisk utfylte inndatafelt */
+  .healthgrid input[readonly] {
+    background-color: rgba(201, 196, 180, 0.2);
+    border-color: var(--line);
+    color: #555;
+    cursor: not-allowed;
+  }
+  .healthgrid .num-row { display: flex; align-items: center; gap: 8px; }
+  .healthgrid input[type=number] {
+    width:100%; font-family:var(--mono); font-size:15px; border:1px solid var(--line);
+    background:#fff; padding:8px 10px; border-radius:3px; color:var(--ink);
+  }
+  /* Fjerner opp/ned-piler i nettlesere for tallfelt */
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  input[type=number] { -moz-appearance: textfield; }
+
   .history{margin-top:26px;}
   .history h2{
     font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
@@ -143,7 +161,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.8</span></h1>
+    <h1>Feltjournal<span>v1.9</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -221,15 +239,15 @@ const SCALES = [
   {key:"stress", label:"Stressnivå"}
 ];
 
-// RETTET I v1.8: HRV er fjernet fra listen over aktive felter
+// NYTT I v1.9: La til isAuto-flagg for å styre om feltet skal låses (readonly)
 const HEALTH = [
-  {key:"steg", label:"Steg", unit:"steg"},
-  {key:"sovn", label:"Søvn", unit:"timer"},
-  {key:"vekt", label:"Vekt", unit:"kg"},
-  {key:"kal_brukt", label:"Kalorier brukt (Garmin)", unit:"kcal"},
-  {key:"kal_balanse", label:"Kaloribalanse (Yazio)", unit:"kcal, +/-"},
-  {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm"},
-  {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm"}
+  {key:"steg", label:"Steg", unit:"steg", isAuto: true},
+  {key:"sovn", label:"Søvn", unit:"timer", isAuto: true},
+  {key:"vekt", label:"Vekt", unit:"kg", isAuto: true},
+  {key:"kal_brukt", label:"Kalorier brukt (Garmin)", unit:"kcal", isAuto: true},
+  {key:"kal_balanse", label:"Kaloribalanse (Yazio)", unit:"kcal, +/-", isAuto: true},
+  {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm", isAuto: false},
+  {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm", isAuto: false}
 ];
 
 const INTAKE_OPTIONS = ["0", "1", "2", "3", "4+"];
@@ -258,6 +276,7 @@ let saveTimeout = null;
 const todayStr = new Date().toISOString().slice(0,10);
 let currentDate = todayStr;
 let currentEntry = emptyEntry();
+let weightDateLabel = ""; // NYTT I v1.9: Holder styr på parentesdato for vekt
 
 function emptyEntry(){
   return { habits:{}, supps:{}, diet:{}, alkohol:"", koffein:"", scales:{brainfog:5, energi:5, stress:5}, health:{} };
@@ -331,8 +350,15 @@ async function fetchExistingDataFromSheet(dateStr) {
 async function fetchAllHealthData(dateStr) {
   if (!googleAccessToken) return;
   const targetDateAtCall = dateStr;
+  
+  // Vanlig døgn-vindu for skritt, kalorier og søvn
   const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
   const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
+  
+  // NYTT I v1.9: 30-dagers historisk vindu for å hente aller siste vektmåling
+  const lookbackDate = new Date(new Date(dateStr + "T00:00:00").getTime() - (30 * 24 * 60 * 60 * 1000));
+  const lookbackStartNano = BigInt(lookbackDate.getTime()) * 1000000n;
+  
   const headers = { "Authorization": "Bearer " + googleAccessToken };
   let newHealthData = {}; let found = false;
   
@@ -343,11 +369,32 @@ async function fetchAllHealthData(dateStr) {
     const cRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`, { headers });
     if (cRes.ok) { const d = await cRes.json(); let c = 0; d.point?.forEach(p => c += p.value?.[0]?.fpVal || 0); if (c > 0) { newHealthData.kal_brukt = Math.round(c); found = true; } }
     
-    const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`, { headers });
-    if (wRes.ok) { const d = await wRes.json(); if (d.point?.length > 0) { let w = d.point[d.point.length - 1].value?.[0]?.fpVal || 0; if (w > 0) { newHealthData.vekt = Math.round(w * 10) / 10; found = true; } } }
-    
     const slRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${startNano}-${endNano}`, { headers });
     if (slRes.ok) { const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000); if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; } }
+
+    // MODIFISERT I v1.9: Henter siste 30 dagers måling for vekt i stedet for bare gjeldende døgn
+    const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${lookbackStartNano}-${endNano}`, { headers });
+    if (wRes.ok) { 
+      const d = await wRes.json(); 
+      if (d.point?.length > 0) { 
+        const lastPoint = d.point[d.point.length - 1];
+        let w = lastPoint.value?.[0]?.fpVal || 0; 
+        if (w > 0) { 
+          newHealthData.vekt = Math.round(w * 10) / 10; 
+          found = true; 
+          
+          // Finn datoen målingen ble gjort
+          const measuredMs = Number(BigInt(lastPoint.endTimeNanos) / 1000000n);
+          const measuredDateStr = new Date(measuredMs).toISOString().slice(0,10);
+          if (measuredDateStr !== dateStr) {
+            const [_, m, day] = measuredDateStr.split("-");
+            weightDateLabel = ` (${day}.${m})`;
+          } else {
+            weightDateLabel = "";
+          }
+        } 
+      } 
+    }
 
     if (found && targetDateAtCall === currentDate) {
       Object.assign(currentEntry.health, newHealthData);
@@ -371,7 +418,6 @@ function entryToRow(dateStr, entry){
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
   
-  // Merk: Arket beholder "HRV"-kolonnen intakt i strukturen, men koden sender bare blankt dit nå
   HEALTH.forEach(h => { 
     const label = h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)));
     row[SHEET_HEADERS.indexOf(label)] = entry.health[h.key] || ""; 
@@ -422,13 +468,25 @@ function renderScales(){
   });
 }
 
+// MODIFISERT I v1.9: Låser nå automatiske inputfelter med readonly, fjerner pilene, og legger på dynamisk vekt-dato
 function renderHealth(){
   const c = document.getElementById("healthFields"); c.innerHTML = "";
   HEALTH.forEach(h=>{
     const f = document.createElement("div"); f.className = "field";
-    f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
+    
+    // Sjekk om dette er Vekt-feltet for å slenge på eventuell dynamisk dato i labelen
+    let displayLabel = h.label;
+    if (h.key === "vekt" && weightDateLabel !== "") {
+      displayLabel = `${h.label}${weightDateLabel}`;
+    }
+    
+    const readonlyAttr = h.isAuto ? "readonly" : "";
+    f.innerHTML = `<label>${displayLabel}</label><div class="num-row"><input type="number" step="any" ${readonlyAttr} value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
+    
     const input = f.querySelector("input");
-    input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); };
+    if (!h.isAuto) {
+      input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); };
+    }
     c.appendChild(f);
   });
 }
@@ -478,6 +536,7 @@ async function executeSaveDirectly(){
 
 async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "laster…";
+  weightDateLabel = ""; // Nullstill datomerking ved ny innlasting
   
   let localData = null;
   const stored = localStorage.getItem("entry:" + dateStr);
