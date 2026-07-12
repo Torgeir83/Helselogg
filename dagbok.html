@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.9.1</title>
+<title>Feltjournal v1.9.2</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -148,6 +148,7 @@
   }
   .sync-info { font-family: var(--sans); font-size: 13px; color: var(--ink); }
   .sync-info span { font-family: var(--mono); font-weight: 600; }
+  .error-msg { font-family: var(--mono); font-size: 11px; color: var(--clay); margin-top: 4px; font-weight: 600; }
   .btn-small {
     background: none; border: 1px solid var(--moss); color: var(--moss);
     padding: 6px 12px; border-radius: 3px; cursor: pointer; font-family: var(--sans); font-size: 12px;
@@ -159,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.9.1</span></h1>
+    <h1>Feltjournal<span>v1.9.2</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -174,6 +175,7 @@
   <div class="sync-box">
     <div class="sync-info">
       Google Status: <span id="googleStatus">venter på bibliotek...</span>
+      <div class="error-msg" id="sheetError" style="display:none;"></div>
     </div>
     <div>
       <button id="googleConnectBtn" class="btn-small" style="border-color: var(--line); color: var(--ink);">Logg inn med Google</button>
@@ -237,7 +239,6 @@ const SCALES = [
   {key:"stress", label:"Stressnivå"}
 ];
 
-// RETTET I v1.9.1: kal_balanse har nå isAuto: false, slik at du kan skrive i det
 const HEALTH = [
   {key:"steg", label:"Steg", unit:"steg", isAuto: true},
   {key:"sovn", label:"Søvn", unit:"timer", isAuto: true},
@@ -284,6 +285,13 @@ function setGoogleStatus(text, isError=false) {
   const el = document.getElementById("googleStatus");
   el.textContent = text;
   el.style.color = isError ? "var(--clay)" : "var(--moss-dark)";
+  if (!isError) document.getElementById("sheetError").style.display = "none";
+}
+
+function showSheetError(msg) {
+  const el = document.getElementById("sheetError");
+  el.textContent = msg;
+  el.style.display = "block";
 }
 
 function googleScriptLoaded() { 
@@ -391,7 +399,6 @@ async function fetchAllHealthData(dateStr) {
     }
 
     if (found && targetDateAtCall === currentDate) {
-      // Bevarer eksisterende manuelle felt (som kal_balanse) ved sammenslåing
       Object.assign(currentEntry.health, newHealthData);
       renderHealth();
       await executeSaveDirectly();
@@ -413,6 +420,7 @@ function entryToRow(dateStr, entry){
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
   
+  // Merk: Sikrer at alle helsedata mappes nøyaktig mot arket (HRV-indeks forblir tom)
   HEALTH.forEach(h => { 
     const label = h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)));
     row[SHEET_HEADERS.indexOf(label)] = entry.health[h.key] || ""; 
@@ -422,23 +430,44 @@ function entryToRow(dateStr, entry){
 
 let syncQueue = Promise.resolve();
 async function syncToSheet(dateStr, entry){ syncQueue = syncQueue.then(()=> doSyncToSheet(dateStr, entry)); return syncQueue; }
+
+// FORBEDRET I v1.9.2: Lagt til robust feilhåndtering med synlige feilmeldinger hvis skriving feiler
 async function doSyncToSheet(dateStr, entry){
   if(!googleAccessToken || !spreadsheetId) return;
   try{
     const getRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:A`, { headers:{ "Authorization":"Bearer "+googleAccessToken } });
+    if (!getRes.ok) { showSheetError(`Kunne ikke lese ark-rader: Status ${getRes.status}`); return; }
+    
     const getData = await getRes.json(); const rows = getData.values || [];
     let rowIndex = rows.findIndex(r => r[0] === dateStr); const row = entryToRow(dateStr, entry);
+    
+    let targetUrl = "";
+    let method = "POST";
+    
     if(rowIndex > 0 || (rowIndex === 0 && rows[0] && rows[0][0] === dateStr)){
       const sheetRowNum = rowIndex + 1;
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${String.fromCharCode(65+SHEET_HEADERS.length-1)}${sheetRowNum}?valueInputOption=USER_ENTERED`, {
-        method:"PUT", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, body: JSON.stringify({ values:[row] })
-      });
+      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A${sheetRowNum}:${String.fromCharCode(65+SHEET_HEADERS.length-1)}${sheetRowNum}?valueInputOption=USER_ENTERED`;
+      method = "PUT";
     } else {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
-        method:"POST", headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, body: JSON.stringify({ values:[row] })
-      });
+      targetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+      method = "POST";
     }
-  }catch(err) {}
+
+    const writeRes = await fetch(targetUrl, {
+      method: method, 
+      headers:{ "Authorization":"Bearer "+googleAccessToken, "Content-Type":"application/json" }, 
+      body: JSON.stringify({ values:[row] })
+    });
+    
+    if (!writeRes.ok) {
+      const errData = await writeRes.json().catch(() => ({}));
+      showSheetError(`Skriving feilet: ${errData.error?.message || writeRes.statusText}`);
+    } else {
+      document.getElementById("sheetError").style.display = "none";
+    }
+  } catch(err) {
+    showSheetError(`Nettverksfeil ved skriving: ${err.message}`);
+  }
 }
 
 function renderTags(containerId, list, storeKey){
@@ -477,7 +506,6 @@ function renderHealth(){
     f.innerHTML = `<label>${displayLabel}</label><div class="num-row"><input type="number" step="any" ${readonlyAttr} value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
     
     const input = f.querySelector("input");
-    // Kun koble opp lagringsevent hvis feltet IKKE er automatisk (isAuto: false)
     if (!h.isAuto) {
       input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); };
     }
