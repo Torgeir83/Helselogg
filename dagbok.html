@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.4</title>
+<title>Feltjournal v1.5</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -136,7 +136,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.4</span></h1>
+    <h1>Feltjournal<span>v1.5</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -212,8 +212,6 @@
 
 </div>
 
-<script src="https://accounts.google.com/gsi/client" onload="googleScriptLoaded()"></script>
-
 <script>
 const HABITS = ["Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys/utendørs"];
 const SUPPS = ["Vitamin C","Vitamin D","Tran"];
@@ -269,7 +267,11 @@ function setGoogleStatus(text, isError=false) {
   el.style.color = isError ? "var(--clay)" : "var(--moss-dark)";
 }
 
-function googleScriptLoaded() { setGoogleStatus("ikke tilkoblet"); initGoogleAuth(); }
+function googleScriptLoaded() { 
+  setGoogleStatus("ikke tilkoblet"); 
+  initGoogleAuth(); 
+}
+
 function initGoogleAuth(){
   if(!window.google || !google.accounts?.oauth2){ return; }
   tokenClient = google.accounts.oauth2.initTokenClient({
@@ -469,7 +471,6 @@ async function loadEntry(dateStr) {
   
   renderAll();
   
-  // RETTET I v1.4: Byttet ut feil variabelnavn (dataFromSheet -> sheetData)
   if (!sheetData && googleAccessToken) {
     await fetchAllHealthData(dateStr);
   }
@@ -521,5 +522,8 @@ document.getElementById("nextDay").onclick = async ()=>{ if(currentDate < todayS
 loadEntry(currentDate);
 renderHistory();
 </script>
+
+<!-- RETTET I v1.5: Eksternt Google-skript er flyttet helt til bunnen, etter at funksjonene er ferdig tolket -->
+<script src="https://accounts.google.com/gsi/client" onload="googleScriptLoaded()" async defer></script>
 </body>
 </html>
