@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.7</title>
+<title>Feltjournal v1.8</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -87,7 +87,6 @@
     display:block; font-size:12px; color:#6b6656; margin-bottom:5px; font-family:var(--sans);
   }
   
-  /* NYTT I v1.7: Styling for inntaksknapper */
   .intake-buttons {
     display: flex; gap: 6px; margin-top: 4px;
   }
@@ -144,7 +143,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.7</span></h1>
+    <h1>Feltjournal<span>v1.8</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -221,10 +220,11 @@ const SCALES = [
   {key:"energi", label:"Energinivå"},
   {key:"stress", label:"Stressnivå"}
 ];
+
+// RETTET I v1.8: HRV er fjernet fra listen over aktive felter
 const HEALTH = [
   {key:"steg", label:"Steg", unit:"steg"},
   {key:"sovn", label:"Søvn", unit:"timer"},
-  {key:"hrv", label:"HRV", unit:"ms"},
   {key:"vekt", label:"Vekt", unit:"kg"},
   {key:"kal_brukt", label:"Kalorier brukt (Garmin)", unit:"kcal"},
   {key:"kal_balanse", label:"Kaloribalanse (Yazio)", unit:"kcal, +/-"},
@@ -370,7 +370,12 @@ function entryToRow(dateStr, entry){
   row[SHEET_HEADERS.indexOf("Brainfog")] = entry.scales.brainfog ?? "";
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
-  HEALTH.forEach(h => { row[SHEET_HEADERS.indexOf(h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label))))] = entry.health[h.key] || ""; });
+  
+  // Merk: Arket beholder "HRV"-kolonnen intakt i strukturen, men koden sender bare blankt dit nå
+  HEALTH.forEach(h => { 
+    const label = h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)));
+    row[SHEET_HEADERS.indexOf(label)] = entry.health[h.key] || ""; 
+  });
   return row;
 }
 
@@ -421,14 +426,13 @@ function renderHealth(){
   const c = document.getElementById("healthFields"); c.innerHTML = "";
   HEALTH.forEach(h=>{
     const f = document.createElement("div"); f.className = "field";
-    f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" value="${currentEntry.health[h.key] ?? ''}"></div>`;
+    f.innerHTML = `<label>${h.label}</label><div class="num-row"><input type="number" step="any" value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
     const input = f.querySelector("input");
     input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); };
     c.appendChild(f);
   });
 }
 
-/* NYTT I v1.7: Logikk for inntaksknapper i stedet for inputfelt */
 function renderIntakeButtons(containerId, storeKey) {
   const container = document.getElementById(containerId);
   container.innerHTML = "";
@@ -514,7 +518,6 @@ async function handleDateChange(newDate) {
   renderHistory();
 }
 
-/* NYTT I v1.7: Begrenset listen strikt til de 10 siste oppføringene */
 function renderHistory(){
   const el = document.getElementById("historyTable"); 
   const keys = [];
@@ -525,7 +528,6 @@ function renderHistory(){
   if(keys.length===0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
   keys.sort().reverse(); const rows = [];
   
-  // Henter nøyaktig de 10 øverste (siste) elementene
   for(const k of keys.slice(0,10)){
     const e = JSON.parse(localStorage.getItem(k)); const date = k.replace("entry:","");
     rows.push(`<tr><td class="rowdate" data-date="${date}">${date}</td><td>${Object.values(e.habits||{}).filter(Boolean).length}/${HABITS.length}</td><td>${e.scales?.brainfog ?? "–"}</td><td>${e.health?.co2_snitt || "–"}</td></tr>`);
