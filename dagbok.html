@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.9.7</title>
+<title>Feltjournal v1.9.8</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -160,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.9.7</span></h1>
+    <h1>Feltjournal<span>v1.9.8</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -240,14 +240,26 @@ const SCALES = [
 ];
 
 const HEALTH = [
-  {key:"steg", label:"Steg", unit:"steg", isAuto: true},
-  {key:"sovn", label:"Søvn", unit:"timer", isAuto: true},
-  {key:"vekt", label:"Vekt", unit:"kg", isAuto: true},
-  {key:"kal_brukt", label:"Kalorier brukt (Garmin)", unit:"kcal", isAuto: true},
-  {key:"kal_balanse", label:"Kaloribalanse (Yazio)", unit:"kcal, +/-", isAuto: false},
-  {key:"co2_snitt", label:"CO2 soverom, snitt", unit:"ppm", isAuto: false},
-  {key:"co2_max", label:"CO2 soverom, maks", unit:"ppm", isAuto: false}
+  {key:"steg", unit:"steg", isAuto: true},
+  {key:"sovn", unit:"timer", isAuto: true},
+  {key:"vekt", unit:"kg", isAuto: true},
+  {key:"kal_brukt", unit:"kcal", isAuto: true},
+  {key:"kal_balanse", unit:"kcal, +/-", isAuto: false},
+  {key:"co2_snitt", unit:"ppm", isAuto: false},
+  {key:"co2_max", unit:"ppm", isAuto: false}
 ];
+
+// Mapper visningsnavn for merkelappene dynamisk
+function getFieldLabel(key) {
+  if (key === "steg") return "Steg";
+  if (key === "sovn") return "Søvn";
+  if (key === "vekt") return "Vekt";
+  if (key === "kal_brukt") return "Kalorier brukt (Garmin)";
+  if (key === "kal_balanse") return "Kaloribalanse (Yazio)";
+  if (key === "co2_snitt") return "CO2 soverom, snitt";
+  if (key === "co2_max") return "CO2 soverom, maks";
+  return key;
+}
 
 const INTAKE_OPTIONS = ["0", "1", "2", "3", "4+"];
 
@@ -350,22 +362,21 @@ async function fetchExistingDataFromSheet(dateStr) {
     entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
     entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
     HEALTH.forEach(h => {
-      const label = h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)));
-      const v = getVal(label); entry.health[h.key] = v !== "" ? Number(v) : "";
+      const sheetName = h.key === "kal_brukt" ? "Kalorier brukt" : (h.key === "kal_balanse" ? "Kaloribalanse" : (h.key === "co2_snitt" ? "CO2 snitt" : (h.key === "co2_max" ? "CO2 maks" : getFieldLabel(h.key))));
+      const v = getVal(sheetName); entry.health[h.key] = v !== "" ? Number(v) : "";
     });
     return entry;
   } catch (err) { return null; }
 }
 
-async function fetchAllHealthData(dateStr) {
+// RETTET I v1.9.8: Tvinger overskriving og oppdatering av tomme felter når funksjonen kalles manuelt
+async function fetchAllHealthData(dateStr, forceOverwrite = false) {
   if (!googleAccessToken) return;
   const targetDateAtCall = dateStr;
   
-  // Standard døgnvindu for skritt, vekt og kalorier
   const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
   const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
   
-  // MODIFISERT I v1.9.7: Dedikert, utvidet natt-tidsvindu for søvn (fra kl. 18 i går til kl. 12 i dag)
   const prevDateStr = shiftDate(dateStr, -1);
   const sleepStartNano = BigInt(new Date(prevDateStr + "T18:00:00").getTime()) * 1000000n;
   const sleepEndNano = BigInt(new Date(dateStr + "T12:00:00").getTime()) * 1000000n;
@@ -375,14 +386,13 @@ async function fetchAllHealthData(dateStr) {
   
   try {
     const sRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.step_count.delta:com.google.android.gms:estimated_steps/datasets/${startNano}-${endNano}`, { headers });
-    if (sRes.ok) { const d = await sRes.json(); let s = 0; d.point?.forEach(p => s += p.value?.[0]?.intVal || 0); if (s > 0) { newHealthData.steg = s; found = true; } }
+    if (sRes.ok) { const d = await sRes.json(); let s = 0; d.point?.forEach(p => s += p.value?.[0]?.intVal || 0); if (s > 0 || forceOverwrite) { newHealthData.steg = s; found = true; } }
     
     const cRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended/datasets/${startNano}-${endNano}`, { headers });
-    if (cRes.ok) { const d = await cRes.json(); let c = 0; d.point?.forEach(p => c += p.value?.[0]?.fpVal || 0); if (c > 0) { newHealthData.kal_brukt = Math.round(c); found = true; } }
+    if (cRes.ok) { const d = await cRes.json(); let c = 0; d.point?.forEach(p => c += p.value?.[0]?.fpVal || 0); if (c > 0 || forceOverwrite) { newHealthData.kal_brukt = Math.round(c); found = true; } }
     
-    // Bruker det utvidede søvnvinduet for å hente natten stabilt
     const slRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.sleep.segment:com.google.android.gms:merged/datasets/${sleepStartNano}-${sleepEndNano}`, { headers });
-    if (slRes.ok) { const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000); if (ms > 0) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; } }
+    if (slRes.ok) { const d = await slRes.json(); let ms = 0; d.point?.forEach(p => ms += Number(BigInt(p.endTimeNanos) - BigInt(p.startTimeNanos)) / 1000000); if (ms > 0 || forceOverwrite) { newHealthData.sovn = Math.round((ms / (1000 * 60 * 60)) * 10) / 10; found = true; } }
 
     const wRes = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startNano}-${endNano}`, { headers });
     if (wRes.ok) { 
@@ -400,7 +410,8 @@ async function fetchAllHealthData(dateStr) {
 
     if (found && targetDateAtCall === currentDate) {
       for (const k in newHealthData) {
-        if (newHealthData[k] !== undefined && newHealthData[k] !== "") {
+        // Tar inn verdien hvis den finnes, eller hvis vi tvinger gjennom oppdatering
+        if (newHealthData[k] !== undefined || forceOverwrite) {
           currentEntry.health[k] = newHealthData[k];
         }
       }
@@ -444,8 +455,8 @@ function entryToRow(dateStr, entry){
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
   HEALTH.forEach(h => { 
-    const label = h.label === "Kalorier brukt (Garmin)" ? "Kalorier brukt" : (h.label === "Kaloribalanse (Yazio)" ? "Kaloribalanse" : (h.label === "CO2 soverom, snitt" ? "CO2 snitt" : (h.label === "CO2 soverom, maks" ? "CO2 maks" : h.label)));
-    row[SHEET_HEADERS.indexOf(label)] = entry.health[h.key] || ""; 
+    const sheetName = h.key === "kal_brukt" ? "Kalorier brukt" : (h.key === "kal_balanse" ? "Kaloribalanse" : (h.key === "co2_snitt" ? "CO2 snitt" : (h.key === "co2_max" ? "CO2 maks" : getFieldLabel(h.key))));
+    row[SHEET_HEADERS.indexOf(sheetName)] = entry.health[h.key] || ""; 
   });
   return row;
 }
@@ -493,7 +504,7 @@ function renderHealth(){
   const c = document.getElementById("healthFields"); c.innerHTML = "";
   HEALTH.forEach(h=>{
     const f = document.createElement("div"); f.className = "field";
-    let displayLabel = h.label; if (h.key === "vekt" && weightDateLabel !== "") { displayLabel = `${h.label}${weightDateLabel}`; }
+    let displayLabel = getFieldLabel(h.key); if (h.key === "vekt" && weightDateLabel !== "") { displayLabel = `${displayLabel}${weightDateLabel}`; }
     const readonlyAttr = h.isAuto ? "readonly" : "";
     f.innerHTML = `<label>${displayLabel}</label><div class="num-row"><input type="number" step="any" ${readonlyAttr} value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
     const input = f.querySelector("input"); if (!h.isAuto) { input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); }; }
@@ -562,6 +573,12 @@ document.getElementById("dateInput").value = currentDate; updateDateDisplay();
 document.getElementById("dateInput").onchange = async (e)=>{ if(e.target.value > todayStr) { e.target.value = currentDate; return; } await handleDateChange(e.target.value); };
 document.getElementById("prevDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, -1)); };
 document.getElementById("nextDay").onclick = async ()=>{ if(currentDate < todayStr) await handleDateChange(shiftDate(currentDate, 1)); };
+
+// RETTET I v1.9.8: Knappen overstyrer nå lagrede verdier og tvinger en ekte API-kjøring
+document.getElementById("fetchHealthBtn").onclick = async () => {
+  document.getElementById("saveStatus").textContent = "tvinger henting…";
+  await fetchAllHealthData(currentDate, true);
+};
 
 loadEntry(currentDate); renderHistory();
 </script>
