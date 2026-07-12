@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<title>Feltjournal v1.9.4</title>
+<title>Feltjournal v1.9.5</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -160,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.9.4</span></h1>
+    <h1>Feltjournal<span>v1.9.5</span></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -340,8 +340,13 @@ async function fetchExistingDataFromSheet(dateStr) {
     HABITS.forEach(h => { entry.habits[h] = getVal(h) === "1"; });
     SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
     DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
-    entry.alkohol = getVal("Alkohol");
-    entry.koffein = getVal("Koffein");
+    
+    // NYTT I v1.9.5: Hvis verdien i arket er "4", mapper vi den tilbake til "4+" på knappen i grensesnittet
+    const alkVal = getVal("Alkohol");
+    entry.alkohol = alkVal === "4" ? "4+" : alkVal;
+    const koffVal = getVal("Koffein");
+    entry.koffein = koffVal === "4" ? "4+" : koffVal;
+    
     entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
     entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
     entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
@@ -414,8 +419,11 @@ function entryToRow(dateStr, entry){
   HABITS.forEach(h => { row[SHEET_HEADERS.indexOf(h)] = entry.habits[h] ? "1" : "0"; });
   SUPPS.forEach(s => { row[SHEET_HEADERS.indexOf(s)] = entry.supps[s] ? "1" : "0"; });
   DIET.forEach(d => { row[SHEET_HEADERS.indexOf(d)] = entry.diet[d] ? "1" : "0"; });
-  row[SHEET_HEADERS.indexOf("Alkohol")] = entry.alkohol || "";
-  row[SHEET_HEADERS.indexOf("Koffein")] = entry.koffein || "";
+  
+  // RETTET I v1.9.5: Konverterer "4+" til en ren "4" når dataene pakkes for Google Sheets
+  row[SHEET_HEADERS.indexOf("Alkohol")] = entry.alkohol === "4+" ? "4" : (entry.alkohol || "");
+  row[SHEET_HEADERS.indexOf("Koffein")] = entry.koffein === "4+" ? "4" : (entry.koffein || "");
+  
   row[SHEET_HEADERS.indexOf("Brainfog")] = entry.scales.brainfog ?? "";
   row[SHEET_HEADERS.indexOf("Energi")] = entry.scales.energi ?? "";
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
@@ -430,7 +438,6 @@ function entryToRow(dateStr, entry){
 let syncQueue = Promise.resolve();
 async function syncToSheet(dateStr, entry){ syncQueue = syncQueue.then(()=> doSyncToSheet(dateStr, entry)); return syncQueue; }
 
-// TOTALRENOVERT I v1.9.4: Dropper append helt. Bruker ren PUT mot nøyaktig kalkulert radnummer.
 async function doSyncToSheet(dateStr, entry){
   if(!googleAccessToken || !spreadsheetId) return;
   try{
@@ -442,10 +449,8 @@ async function doSyncToSheet(dateStr, entry){
     
     let sheetRowNum;
     if(rowIndex >= 0 && rows[rowIndex] && rows[rowIndex][0] === dateStr){
-      // Datoen finnes fra før -> overskriv raden
       sheetRowNum = rowIndex + 1;
     } else {
-      // Datoen er helt ny -> skriv direkte til neste tomme linje i arket
       sheetRowNum = rows.length + 1;
     }
 
