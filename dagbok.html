@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Feltjournal v2.0.2</title>
+<title>Feltjournal v2.0.4</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -160,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.2</a></h1>
+    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.4</a></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -230,7 +230,7 @@
 </div>
 
 <script>
-const HABITS = ["Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys/utendørs"];
+const HABITS = ["Trene styrke","Trene kardio","Lese","Gå til jobb","PMO","Dagslys/utendørs"];
 const SUPPS = ["Vitamin C","Vitamin D","Tran"];
 const DIET = ["Ultraprosessert mat","Sukker"];
 const SCALES = [
@@ -268,7 +268,7 @@ const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets " +
                      "https://www.googleapis.com/auth/fitness.body.read " +
                      "https://www.googleapis.com/auth/fitness.sleep.read";
 
-const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","Pornobruk","Dagslys/utendørs",
+const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","PMO","Dagslys/utendørs",
   "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
   "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kalorier brukt","Kaloribalanse","CO2 snitt","CO2 maks"];
 
@@ -429,15 +429,22 @@ async function fetchAllHealthData(dateStr, forceOverwrite = false) {
 
 function findLastRegisteredWeight(beforeDateStr) {
   const keys = [];
+  // Vi sjekker både lokalt minne og Google Sheets for å finne forrige vekt
   for(let i=0; i<localStorage.length; i++) {
     const k = localStorage.key(i);
     if(k.startsWith("entry:")) keys.push(k);
   }
-  keys.sort().reverse();
-  for(const k of keys) {
+  Object.keys(sheetEntries).forEach(d => keys.push("entry:" + d));
+  
+  const uniqueKeys = Array.from(new Set(keys)).sort().reverse();
+  for(const k of uniqueKeys) {
     const date = k.replace("entry:", "");
     if (date < beforeDateStr) {
-      const e = JSON.parse(localStorage.getItem(k));
+      let e = null;
+      const stored = localStorage.getItem(k);
+      if(stored) e = JSON.parse(stored);
+      if(!e && sheetEntries[date]) e = sheetEntries[date];
+      
       if (e?.health?.vekt) {
         const [_, m, d] = date.split("-");
         return { weight: e.health.vekt, label: ` (${d}.${m})` };
@@ -537,7 +544,6 @@ async function executeSaveDirectly(){
   if (snapshotDate === currentDate) { document.getElementById("saveStatus").textContent = "lagret"; renderHistory(); }
 }
 
-// RETTET I v2.0.2: Tvinger FULL toveis synkronisering av alle felter ved innlasting
 async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "laster…"; weightDateLabel = "";
   
@@ -551,11 +557,8 @@ async function loadEntry(dateStr) {
   
   let sheetData = sheetEntries[dateStr] || null;
   
-  // NY LOGIKK I v2.0.2: Vi prioriterer alltid skyen (Google Sheets) om dataene skiller seg ut, 
-  // slik at endringer gjort på PC umiddelbart tvinges over på mobilen.
   if (sheetData) {
     currentEntry = sheetData;
-    // Synkroniserer det lokale minnet på denne enheten så de er like
     localStorage.setItem("entry:" + dateStr, JSON.stringify(sheetData));
     document.getElementById("saveStatus").textContent = "synkronisert";
   } else if (localData) {
@@ -566,6 +569,8 @@ async function loadEntry(dateStr) {
     document.getElementById("saveStatus").textContent = "klar";
   }
   
+  // RETTET I v2.0.4: Hvis vi henter en fallback-vekt, lagrer vi den nå *faktisk* inn i currentEntry
+  // slik at den blir eksportert og lagret i Google Sheets også på dager du ikke veier deg!
   if (!currentEntry.health.vekt || weightDateLabel === "") {
     const fallback = findLastRegisteredWeight(dateStr);
     if (fallback && !currentEntry.health.vekt) {
