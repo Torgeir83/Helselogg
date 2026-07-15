@@ -2,9 +2,8 @@
 <html lang="no">
 <head>
 <meta charset="UTF-8">
-<!-- NYTT I v1.9.9: Denne linjen tvinger siden til å tilpasse seg mobilskjermer perfekt -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Feltjournal v1.9.9</title>
+<title>Feltjournal v2.0.2</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -28,7 +27,7 @@
     font-family:'Source Serif 4';
     src: local('Georgia');
   }
-  .wrap{max-width:760px; margin:0 auto; padding:20px 14px;} /* Mer mobilvennlig padding */
+  .wrap{max-width:760px; margin:0 auto; padding:20px 14px;}
 
   header.top{
     display:flex; justify-content:space-between; align-items:flex-end;
@@ -37,8 +36,14 @@
   header.top h1{
     font-family:var(--serif); font-weight:600; font-size:26px; margin:0; letter-spacing:-0.01em;
   }
-  header.top h1 span{
-    font-family:var(--mono); font-size:12px; color:var(--clay); margin-left:6px; vertical-align:middle;
+  header.top h1 a.sheet-link{
+    font-family:var(--mono); font-size:12px; color:var(--clay); margin-left:6px; 
+    vertical-align:middle; text-decoration:none; border: 1px solid var(--line); 
+    padding: 2px 6px; border-radius: 4px; background: rgba(168, 86, 46, 0.05);
+    transition: all 0.1s ease; display: inline-block;
+  }
+  header.top h1 a.sheet-link:hover{
+    background: var(--clay); color: #fff; border-color: var(--clay);
   }
   header.top .sub{font-family:var(--mono); font-size:10px; color:var(--moss-dark); text-transform:uppercase; letter-spacing:0.08em;}
 
@@ -89,7 +94,7 @@
     display: flex; gap: 6px; margin-top: 4px;
   }
   .intake-btn {
-    flex: 1; font-family: var(--mono); font-size: 14px; padding: 10px 0; /* Større knapper for tomler */
+    flex: 1; font-family: var(--mono); font-size: 14px; padding: 10px 0;
     background: transparent; border: 1px solid var(--line); border-radius: 4px;
     color: var(--ink); cursor: pointer; transition: all 0.1s ease; text-align: center;
   }
@@ -98,12 +103,11 @@
   }
 
   .scale{display:flex; align-items:center; gap:12px;}
-  .scale input[type=range]{flex:1; accent-color:var(--clay); height:24px;} /* Tykkere slider-sone på mobil */
+  .scale input[type=range]{flex:1; accent-color:var(--clay); height:24px;}
   .scale .val{
     font-family:var(--mono); font-size:18px; width:28px; text-align:center; color:var(--clay); font-weight:600;
   }
 
-  /* MODIFISERT I v1.9.9: Optimalisert for 2 kolonner på desktop, 1 på mobil */
   .healthgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
   @media(max-width:520px){.healthgrid{grid-template-columns:1fr; gap:10px;}}
 
@@ -123,7 +127,7 @@
   }
   input[type=number] { -moz-appearance: textfield; }
 
-  .history{margin-top:26px; overflow-x: auto;} /* Hindrer at tabellen skyver ut skjermen */
+  .history{margin-top:26px; overflow-x: auto;}
   .history h2{
     font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
     color:var(--moss-dark); margin:0 0 10px 0;
@@ -156,7 +160,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<span>v1.9.9</span></h1>
+    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.2</a></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -284,6 +288,8 @@ let currentDate = todayStr;
 let currentEntry = emptyEntry();
 let weightDateLabel = "";
 
+let sheetEntries = {};
+
 function emptyEntry(){
   return { habits:{}, supps:{}, diet:{}, alkohol:"", koffein:"", scales:{brainfog:5, energi:5, stress:5}, health:{} };
 }
@@ -294,6 +300,8 @@ function setGoogleStatus(text, isError=false) {
   el.style.color = isError ? "var(--clay)" : "var(--moss-dark)";
   if (!isError) document.getElementById("sheetError").style.display = "none";
 }
+
+const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
 
 function showSheetError(msg) {
   const el = document.getElementById("sheetError");
@@ -322,46 +330,50 @@ function initGoogleAuth(){
   });
 }
 document.getElementById("googleConnectBtn").onclick = ()=>{ if(!tokenClient){ initGoogleAuth(); } tokenClient.requestAccessToken(); };
-const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
 
-async function fetchExistingDataFromSheet(dateStr) {
-  if (!googleAccessToken || !spreadsheetId) return null;
+async function loadSheetEntries() {
+  if (!googleAccessToken || !spreadsheetId) return;
   try {
     const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:Z`, {
       headers: { "Authorization": "Bearer " + googleAccessToken }
     });
-    if (!res.ok) return null;
+    if (!res.ok) return;
     const data = await res.json();
     const rows = data.values || [];
-    if (rows.length <= 1) return null;
+    if (rows.length <= 1) return;
     
-    const foundRow = rows.find(r => r[0] === dateStr);
-    if (!foundRow) return null;
+    sheetEntries = {}; 
     
-    const entry = emptyEntry();
-    const getVal = (headerName) => {
-      const idx = SHEET_HEADERS.indexOf(headerName);
-      return (idx !== -1 && foundRow[idx] !== undefined) ? foundRow[idx] : "";
-    };
-    
-    HABITS.forEach(h => { entry.habits[h] = getVal(h) === "1"; });
-    SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
-    DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
-    
-    const alkVal = getVal("Alkohol");
-    entry.alkohol = alkVal === "4" ? "4+" : alkVal;
-    const koffVal = getVal("Koffein");
-    entry.koffein = koffVal === "4" ? "4+" : koffVal;
-    
-    entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
-    entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
-    entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
-    HEALTH.forEach(h => {
-      const sheetName = h.key === "kal_brukt" ? "Kalorier brukt" : (h.key === "kal_balanse" ? "Kaloribalanse" : (h.key === "co2_snitt" ? "CO2 snitt" : (h.key === "co2_max" ? "CO2 maks" : getFieldLabel(h.key))));
-      const v = getVal(sheetName); entry.health[h.key] = v !== "" ? Number(v) : "";
-    });
-    return entry;
-  } catch (err) { return null; }
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      const dateStr = r[0];
+      if (!dateStr) continue;
+      
+      const entry = emptyEntry();
+      const getVal = (headerName) => {
+        const idx = SHEET_HEADERS.indexOf(headerName);
+        return (idx !== -1 && r[idx] !== undefined) ? r[idx] : "";
+      };
+      
+      HABITS.forEach(h => { entry.habits[h] = getVal(h) === "1"; });
+      SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
+      DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
+      
+      const alkVal = getVal("Alkohol");
+      entry.alkohol = alkVal === "4" ? "4+" : alkVal;
+      const koffVal = getVal("Koffein");
+      entry.koffein = koffVal === "4" ? "4+" : koffVal;
+      
+      entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
+      entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
+      entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
+      HEALTH.forEach(h => {
+        const sheetName = h.key === "kal_brukt" ? "Kalorier brukt" : (h.key === "kal_balanse" ? "Kaloribalanse" : (h.key === "co2_snitt" ? "CO2 snitt" : (h.key === "co2_max" ? "CO2 maks" : getFieldLabel(h.key))));
+        const v = getVal(sheetName); entry.health[h.key] = v !== "" ? Number(v) : "";
+      });
+      sheetEntries[dateStr] = entry;
+    }
+  } catch (err) { console.error("Klarte ikke hente historikk fra Sheets:", err); }
 }
 
 async function fetchAllHealthData(dateStr, forceOverwrite = false) {
@@ -525,14 +537,49 @@ async function executeSaveDirectly(){
   if (snapshotDate === currentDate) { document.getElementById("saveStatus").textContent = "lagret"; renderHistory(); }
 }
 
+// RETTET I v2.0.2: Tvinger FULL toveis synkronisering av alle felter ved innlasting
 async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "laster…"; weightDateLabel = "";
-  let localData = null; const stored = localStorage.getItem("entry:" + dateStr); if(stored) localData = JSON.parse(stored);
-  let sheetData = null; if (googleAccessToken && spreadsheetId) { sheetData = await fetchExistingDataFromSheet(dateStr); }
-  if (localData || sheetData) { currentEntry = localData || emptyEntry(); if (sheetData) { Object.assign(currentEntry.health, sheetData.health); if(!localData) currentEntry = sheetData; } document.getElementById("saveStatus").textContent = "synkronisert"; } else { currentEntry = emptyEntry(); document.getElementById("saveStatus").textContent = "klar"; }
-  if (!currentEntry.health.vekt || weightDateLabel === "") { const fallback = findLastRegisteredWeight(dateStr); if (fallback && !currentEntry.health.vekt) { currentEntry.health.vekt = fallback.weight; weightDateLabel = fallback.label; } }
+  
+  if (googleAccessToken && spreadsheetId) {
+    await loadSheetEntries();
+  }
+  
+  let localData = null; 
+  const stored = localStorage.getItem("entry:" + dateStr); 
+  if(stored) localData = JSON.parse(stored);
+  
+  let sheetData = sheetEntries[dateStr] || null;
+  
+  // NY LOGIKK I v2.0.2: Vi prioriterer alltid skyen (Google Sheets) om dataene skiller seg ut, 
+  // slik at endringer gjort på PC umiddelbart tvinges over på mobilen.
+  if (sheetData) {
+    currentEntry = sheetData;
+    // Synkroniserer det lokale minnet på denne enheten så de er like
+    localStorage.setItem("entry:" + dateStr, JSON.stringify(sheetData));
+    document.getElementById("saveStatus").textContent = "synkronisert";
+  } else if (localData) {
+    currentEntry = localData;
+    document.getElementById("saveStatus").textContent = "synkronisert (lokal)";
+  } else {
+    currentEntry = emptyEntry();
+    document.getElementById("saveStatus").textContent = "klar";
+  }
+  
+  if (!currentEntry.health.vekt || weightDateLabel === "") {
+    const fallback = findLastRegisteredWeight(dateStr);
+    if (fallback && !currentEntry.health.vekt) {
+      currentEntry.health.vekt = fallback.weight;
+      weightDateLabel = fallback.label;
+    }
+  }
+  
   renderAll();
-  if (!sheetData && googleAccessToken) { await fetchAllHealthData(dateStr); }
+  renderHistory();
+  
+  if (!sheetData && googleAccessToken) {
+    await fetchAllHealthData(dateStr);
+  }
 }
 
 async function handleDateChange(newDate) {
@@ -544,10 +591,20 @@ async function handleDateChange(newDate) {
 function renderHistory(){
   const el = document.getElementById("historyTable"); const keys = [];
   for(let i=0; i<localStorage.length; i++) { const k = localStorage.key(i); if(k.startsWith("entry:")) keys.push(k); }
-  if(keys.length===0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
-  keys.sort().reverse(); const rows = [];
-  for(const k of keys.slice(0,10)){
-    const e = JSON.parse(localStorage.getItem(k)); const date = k.replace("entry:","");
+  Object.keys(sheetEntries).forEach(d => keys.push("entry:" + d));
+  
+  const uniqueKeys = Array.from(new Set(keys)).sort().reverse();
+  if(uniqueKeys.length === 0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
+  
+  const rows = [];
+  for(const k of uniqueKeys.slice(0,10)){
+    const date = k.replace("entry:","");
+    let e = null;
+    const stored = localStorage.getItem("entry:" + date);
+    if(stored) e = JSON.parse(stored);
+    if(!e && sheetEntries[date]) e = sheetEntries[date];
+    if(!e) e = emptyEntry();
+    
     rows.push(`<tr><td class="rowdate" data-date="${date}">${date}</td><td>${Object.values(e.habits||{}).filter(Boolean).length}/${HABITS.length}</td><td>${e.scales?.brainfog ?? "–"}</td><td>${e.health?.co2_snitt || "–"}</td></tr>`);
   }
   el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
