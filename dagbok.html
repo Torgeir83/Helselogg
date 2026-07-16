@@ -3,60 +3,170 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Feltjournal v2.0.5</title>
-<!-- ... (samme CSS som før) ... -->
+<title>Feltjournal v2.0.6</title>
 <style>
-  :root{--paper: #EFEDE6; --ink: #232620; --moss: #4B5D45; --moss-dark: #34412F; --clay: #A8562E; --line: #C9C4B4; --card: #F7F5EF; --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace; --serif: 'Source Serif 4', Georgia, serif; --sans: 'Inter', -apple-system, sans-serif;}
+  :root{
+    --paper: #EFEDE6;
+    --ink: #232620;
+    --moss: #4B5D45;
+    --moss-dark: #34412F;
+    --clay: #A8562E;
+    --line: #C9C4B4;
+    --card: #F7F5EF;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
   *{box-sizing:border-box;}
-  body{margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans); padding:0 0 60px 0; -webkit-tap-highlight-color: transparent;}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:var(--sans); padding:0 0 60px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @font-face{
+    font-family:'Source Serif 4';
+    src: local('Georgia');
+  }
   .wrap{max-width:760px; margin:0 auto; padding:20px 14px;}
-  header.top{display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:6px;}
-  header.top h1{font-family:var(--serif); font-weight:600; font-size:26px; margin:0; letter-spacing:-0.01em;}
-  header.top h1 a.sheet-link{font-family:var(--mono); font-size:12px; color:var(--clay); margin-left:6px; vertical-align:middle; text-decoration:none; border: 1px solid var(--line); padding: 2px 6px; border-radius: 4px; background: rgba(168, 86, 46, 0.05); transition: all 0.1s ease; display: inline-block;}
-  header.top h1 a.sheet-link:hover{background: var(--clay); color: #fff; border-color: var(--clay);}
+
+  header.top{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:6px;
+  }
+  header.top h1{
+    font-family:var(--serif); font-weight:600; font-size:26px; margin:0; letter-spacing:-0.01em;
+  }
+  header.top h1 a.sheet-link{
+    font-family:var(--mono); font-size:12px; color:var(--clay); margin-left:6px; 
+    vertical-align:middle; text-decoration:none; border: 1px solid var(--line); 
+    padding: 2px 6px; border-radius: 4px; background: rgba(168, 86, 46, 0.05);
+    transition: all 0.1s ease; display: inline-block;
+  }
+  header.top h1 a.sheet-link:hover{
+    background: var(--clay); color: #fff; border-color: var(--clay);
+  }
   header.top .sub{font-family:var(--mono); font-size:10px; color:var(--moss-dark); text-transform:uppercase; letter-spacing:0.08em;}
-  .datebar{display:flex; align-items:center; gap:10px; margin:14px 0 24px 0; font-family:var(--mono); font-size:13px;}
-  .datebar button{background:none; border:1px solid var(--line); color:var(--ink); width:34px; height:34px; border-radius:4px; cursor:pointer; font-family:var(--mono); font-size:16px; display:flex; align-items:center; justify-content:center;}
+
+  .datebar{
+    display:flex; align-items:center; gap:10px; margin:14px 0 24px 0;
+    font-family:var(--mono); font-size:13px;
+  }
+  .datebar button{
+    background:none; border:1px solid var(--line); color:var(--ink);
+    width:34px; height:34px; border-radius:4px; cursor:pointer; font-family:var(--mono); font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+  }
   .datebar button:hover:not(:disabled){border-color:var(--moss);}
   .datebar button:disabled{opacity:0.3; cursor:not-allowed;}
   .datebar .status{margin-left:auto; font-size:11px; color:#8b8578;}
-  .datebar .dateDisplay{font-family:var(--mono); font-size:14px; border:1px solid var(--line); background:var(--card); padding:6px 12px; border-radius:4px; color:var(--ink); cursor:pointer; user-select:none; font-weight:600;}
-  section.block{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:16px 16px; margin-bottom:14px;}
-  section.block h2{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em; color:var(--moss-dark); margin:0 0 14px 0; font-weight:600;}
+  .datebar .dateDisplay{
+    font-family:var(--mono); font-size:14px; border:1px solid var(--line);
+    background:var(--card); padding:6px 12px; border-radius:4px; color:var(--ink);
+    cursor:pointer; user-select:none; font-weight:600;
+  }
+
+  section.block{
+    background:var(--card); border:1px solid var(--line); border-radius:4px;
+    padding:16px 16px; margin-bottom:14px;
+  }
+  section.block h2{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
+    color:var(--moss-dark); margin:0 0 14px 0; font-weight:600;
+  }
+
   .tags{display:flex; flex-wrap:wrap; gap:8px;}
-  .tag{font-family:var(--sans); font-size:13.5px; padding:8px 14px; border-radius:20px; border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--ink); transition:all .12s ease;}
+  .tag{
+    font-family:var(--sans); font-size:13.5px; padding:8px 14px; border-radius:20px;
+    border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--ink);
+    transition:all .12s ease;
+  }
   .tag.on{background:var(--moss); border-color:var(--moss); color:#fff;}
+
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   @media(max-width:520px){.grid2{grid-template-columns:1fr; gap:10px;}}
+
   .field{margin-bottom:12px;}
-  .field label{display:block; font-size:12px; color:#6b6656; margin-bottom:6px; font-family:var(--sans); font-weight:500;}
-  .intake-buttons {display: flex; gap: 6px; margin-top: 4px;}
-  .intake-btn {flex: 1; font-family: var(--mono); font-size: 14px; padding: 10px 0; background: transparent; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); cursor: pointer; transition: all 0.1s ease; text-align: center;}
-  .intake-btn.active {background: var(--moss); border-color: var(--moss); color: #fff; font-weight: 600;}
+  .field label{
+    display:block; font-size:12px; color:#6b6656; margin-bottom:6px; font-family:var(--sans); font-weight:500;
+  }
+  
+  .intake-buttons {
+    display: flex; gap: 6px; margin-top: 4px;
+  }
+  .intake-btn {
+    flex: 1; font-family: var(--mono); font-size: 14px; padding: 10px 0;
+    background: transparent; border: 1px solid var(--line); border-radius: 4px;
+    color: var(--ink); cursor: pointer; transition: all 0.1s ease; text-align: center;
+  }
+  .intake-btn.active {
+    background: var(--moss); border-color: var(--moss); color: #fff; font-weight: 600;
+  }
+
   .scale{display:flex; align-items:center; gap:12px;}
   .scale input[type=range]{flex:1; accent-color:var(--clay); height:24px;}
-  .scale .val{font-family:var(--mono); font-size:18px; width:28px; text-align:center; color:var(--clay); font-weight:600;}
+  .scale .val{
+    font-family:var(--mono); font-size:18px; width:28px; text-align:center; color:var(--clay); font-weight:600;
+  }
+
   .healthgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
   @media(max-width:520px){.healthgrid{grid-template-columns:1fr; gap:10px;}}
-  .healthgrid input[readonly] {background-color: rgba(201, 196, 180, 0.15); border-color: var(--line); color: #555; cursor: not-allowed;}
+
+  .healthgrid input[readonly] {
+    background-color: rgba(201, 196, 180, 0.15);
+    border-color: var(--line);
+    color: #555;
+    cursor: not-allowed;
+  }
   .healthgrid .num-row { display: flex; align-items: center; gap: 8px; }
-  .healthgrid input[type=number] {width:100%; font-family:var(--mono); font-size:16px; border:1px solid var(--line); background:#fff; padding:10px 12px; border-radius:4px; color:var(--ink);}
-  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {-webkit-appearance: none; margin: 0;}
+  .healthgrid input[type=number] {
+    width:100%; font-family:var(--mono); font-size:16px; border:1px solid var(--line);
+    background:#fff; padding:10px 12px; border-radius:4px; color:var(--ink);
+  }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
   input[type=number] { -moz-appearance: textfield; }
+
+  /* ENDRET I v2.0.6: Styling for pluss/minus-veksleren */
+  .sign-toggle-btn {
+    background: none; border: 1px solid var(--line); border-radius: 4px;
+    font-family: var(--mono); font-size: 14px; font-weight: bold; width: 44px; height: 41px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: all 0.1s ease; user-select: none; color: var(--ink);
+  }
+  .sign-toggle-btn.minus-active {
+    background: rgba(75, 93, 69, 0.1); border-color: var(--moss); color: var(--moss-dark);
+  }
+  .sign-toggle-btn.plus-active {
+    background: rgba(168, 86, 46, 0.1); border-color: var(--clay); color: var(--clay);
+  }
+
   .history{margin-top:26px; overflow-x: auto;}
-  .history h2{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em; color:var(--moss-dark); margin:0 0 10px 0;}
+  .history h2{
+    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
+    color:var(--moss-dark); margin:0 0 10px 0;
+  }
   table.log{width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono); min-width: 400px;}
-  table.log th, table.log td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--line);}
+  table.log th, table.log td{
+    text-align:left; padding:8px 6px; border-bottom:1px solid var(--line);
+  }
   table.log th{color:#8b8578; font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:0.05em;}
   table.log tr:hover td{background:rgba(75,93,69,0.05);}
   table.log .rowdate{cursor:pointer; color:var(--moss-dark); font-weight:600;}
   .empty{color:#a39d8c; font-size:13px; font-style:italic; padding:6px 0;}
-  .sync-box {background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;}
+  
+  .sync-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: 4px;
+    padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
   @media(max-width:400px){.sync-box{flex-direction: column; align-items: flex-start; gap:8px;}}
   .sync-info { font-family: var(--sans); font-size: 13px; color: var(--ink); }
   .sync-info span { font-family: var(--mono); font-weight: 600; }
   .error-msg { font-family: var(--mono); font-size: 11px; color: var(--clay); margin-top: 4px; font-weight: 600; }
-  .btn-small {background: none; border: 1px solid var(--moss); color: var(--moss); padding: 8px 14px; border-radius: 4px; cursor: pointer; font-family: var(--sans); font-size: 12px; font-weight: 500;}
+  .btn-small {
+    background: none; border: 1px solid var(--moss); color: var(--moss);
+    padding: 8px 14px; border-radius: 4px; cursor: pointer; font-family: var(--sans); font-size: 12px; font-weight: 500;
+  }
   .btn-small:hover { background: var(--moss); color: #fff; }
 </style>
 </head>
@@ -64,7 +174,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.5</a></h1>
+    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.6</a></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -147,6 +257,7 @@ const HEALTH = [
   {key:"co2_snitt", unit:"ppm", isAuto: false},
   {key:"co2_max", unit:"ppm", isAuto: false}
 ];
+
 function getFieldLabel(key) {
   if (key === "steg") return "Steg";
   if (key === "sovn") return "Søvn";
@@ -157,6 +268,7 @@ function getFieldLabel(key) {
   if (key === "co2_max") return "CO2 soverom, maks";
   return key;
 }
+
 const INTAKE_OPTIONS = ["0", "1", "2", "3", "4+"];
 const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
 const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.sleep.read";
@@ -222,7 +334,6 @@ async function loadSheetEntries() {
   } catch (err) { console.error("Klarte ikke hente historikk fra Sheets:", err); }
 }
 
-// RETTET I v2.0.5: Bruker Date.UTC for å eliminere tidssone-krøll
 async function fetchAllHealthData(dateStr, forceOverwrite = false) {
   if (!googleAccessToken) return;
   const targetDateAtCall = dateStr;
@@ -349,14 +460,75 @@ function renderScales(){
   });
 }
 
+// ENDRET I v2.0.6: Lagt til interaktiv +/- veksler for Kaloribalanse
 function renderHealth(){
   const c = document.getElementById("healthFields"); c.innerHTML = "";
   HEALTH.forEach(h=>{
     const f = document.createElement("div"); f.className = "field";
     let displayLabel = getFieldLabel(h.key); if (h.key === "vekt" && weightDateLabel !== "") { displayLabel = `${displayLabel}${weightDateLabel}`; }
     const readonlyAttr = h.isAuto ? "readonly" : "";
-    f.innerHTML = `<label>${displayLabel}</label><div class="num-row"><input type="number" step="any" ${readonlyAttr} value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
-    const input = f.querySelector("input"); if (!h.isAuto) { input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); }; }
+    
+    if (h.key === "kal_balanse") {
+      // Kaloribalanse får en spesiell pluss/minus-knapp ved siden av feltet
+      const val = currentEntry.health[h.key] ?? "";
+      const isMinus = typeof val === "number" && val < 0;
+      const displayVal = val !== "" ? Math.abs(val) : "";
+      
+      let btnClass = "sign-toggle-btn";
+      if (val !== "") {
+        btnClass += isMinus ? " minus-active" : " plus-active";
+      }
+      const btnChar = isMinus ? "–" : "+";
+
+      f.innerHTML = `
+        <label>${displayLabel}</label>
+        <div class="num-row">
+          <button type="button" class="${btnClass}" id="balSignBtn">${btnChar}</button>
+          <input type="number" pattern="[0-9]*" inputmode="numeric" value="${displayVal}" placeholder="0" style="flex:1;">
+          <span class="unit">${h.unit}</span>
+        </div>`;
+      
+      const input = f.querySelector("input");
+      const btn = f.querySelector("#balSignBtn");
+      
+      // Når vi taster inn siffer
+      input.oninput = ()=>{
+        const parsedAbs = input.value !== "" ? Math.abs(Number(input.value)) : "";
+        if (parsedAbs === "") {
+          currentEntry.health[h.key] = "";
+          btn.className = "sign-toggle-btn";
+          btn.textContent = "+";
+        } else {
+          const currentIsMinus = btn.textContent === "–";
+          currentEntry.health[h.key] = currentIsMinus ? -parsedAbs : parsedAbs;
+          btn.className = "sign-toggle-btn " + (currentIsMinus ? "minus-active" : "plus-active");
+        }
+        triggerDebouncedSave();
+      };
+
+      // Når vi trykker på +/- knappen
+      btn.onclick = ()=>{
+        const parsedAbs = input.value !== "" ? Math.abs(Number(input.value)) : "";
+        if (btn.textContent === "+") {
+          btn.textContent = "–";
+          btn.className = "sign-toggle-btn minus-active";
+          if (parsedAbs !== "") currentEntry.health[h.key] = -parsedAbs;
+        } else {
+          btn.textContent = "+";
+          btn.className = "sign-toggle-btn plus-active";
+          if (parsedAbs !== "") currentEntry.health[h.key] = parsedAbs;
+        }
+        triggerDebouncedSave();
+      };
+
+    } else {
+      // Standard input for de andre feltene
+      f.innerHTML = `<label>${displayLabel}</label><div class="num-row"><input type="number" step="any" ${readonlyAttr} value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
+      const input = f.querySelector("input"); 
+      if (!h.isAuto) { 
+        input.oninput = ()=>{ currentEntry.health[h.key] = input.value !== "" ? Number(input.value) : ""; triggerDebouncedSave(); }; 
+      }
+    }
     c.appendChild(f);
   });
 }
