@@ -3,156 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Feltjournal v2.0.4</title>
+<title>Feltjournal v2.0.5</title>
+<!-- ... (samme CSS som før) ... -->
 <style>
-  :root{
-    --paper: #EFEDE6;
-    --ink: #232620;
-    --moss: #4B5D45;
-    --moss-dark: #34412F;
-    --clay: #A8562E;
-    --line: #C9C4B4;
-    --card: #F7F5EF;
-    --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
-    --serif: 'Source Serif 4', Georgia, serif;
-    --sans: 'Inter', -apple-system, sans-serif;
-  }
+  :root{--paper: #EFEDE6; --ink: #232620; --moss: #4B5D45; --moss-dark: #34412F; --clay: #A8562E; --line: #C9C4B4; --card: #F7F5EF; --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace; --serif: 'Source Serif 4', Georgia, serif; --sans: 'Inter', -apple-system, sans-serif;}
   *{box-sizing:border-box;}
-  body{
-    margin:0; background:var(--paper); color:var(--ink);
-    font-family:var(--sans); padding:0 0 60px 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-  @font-face{
-    font-family:'Source Serif 4';
-    src: local('Georgia');
-  }
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans); padding:0 0 60px 0; -webkit-tap-highlight-color: transparent;}
   .wrap{max-width:760px; margin:0 auto; padding:20px 14px;}
-
-  header.top{
-    display:flex; justify-content:space-between; align-items:flex-end;
-    border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:6px;
-  }
-  header.top h1{
-    font-family:var(--serif); font-weight:600; font-size:26px; margin:0; letter-spacing:-0.01em;
-  }
-  header.top h1 a.sheet-link{
-    font-family:var(--mono); font-size:12px; color:var(--clay); margin-left:6px; 
-    vertical-align:middle; text-decoration:none; border: 1px solid var(--line); 
-    padding: 2px 6px; border-radius: 4px; background: rgba(168, 86, 46, 0.05);
-    transition: all 0.1s ease; display: inline-block;
-  }
-  header.top h1 a.sheet-link:hover{
-    background: var(--clay); color: #fff; border-color: var(--clay);
-  }
+  header.top{display:flex; justify-content:space-between; align-items:flex-end; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:6px;}
+  header.top h1{font-family:var(--serif); font-weight:600; font-size:26px; margin:0; letter-spacing:-0.01em;}
+  header.top h1 a.sheet-link{font-family:var(--mono); font-size:12px; color:var(--clay); margin-left:6px; vertical-align:middle; text-decoration:none; border: 1px solid var(--line); padding: 2px 6px; border-radius: 4px; background: rgba(168, 86, 46, 0.05); transition: all 0.1s ease; display: inline-block;}
+  header.top h1 a.sheet-link:hover{background: var(--clay); color: #fff; border-color: var(--clay);}
   header.top .sub{font-family:var(--mono); font-size:10px; color:var(--moss-dark); text-transform:uppercase; letter-spacing:0.08em;}
-
-  .datebar{
-    display:flex; align-items:center; gap:10px; margin:14px 0 24px 0;
-    font-family:var(--mono); font-size:13px;
-  }
-  .datebar button{
-    background:none; border:1px solid var(--line); color:var(--ink);
-    width:34px; height:34px; border-radius:4px; cursor:pointer; font-family:var(--mono); font-size:16px;
-    display:flex; align-items:center; justify-content:center;
-  }
+  .datebar{display:flex; align-items:center; gap:10px; margin:14px 0 24px 0; font-family:var(--mono); font-size:13px;}
+  .datebar button{background:none; border:1px solid var(--line); color:var(--ink); width:34px; height:34px; border-radius:4px; cursor:pointer; font-family:var(--mono); font-size:16px; display:flex; align-items:center; justify-content:center;}
   .datebar button:hover:not(:disabled){border-color:var(--moss);}
   .datebar button:disabled{opacity:0.3; cursor:not-allowed;}
   .datebar .status{margin-left:auto; font-size:11px; color:#8b8578;}
-  .datebar .dateDisplay{
-    font-family:var(--mono); font-size:14px; border:1px solid var(--line);
-    background:var(--card); padding:6px 12px; border-radius:4px; color:var(--ink);
-    cursor:pointer; user-select:none; font-weight:600;
-  }
-
-  section.block{
-    background:var(--card); border:1px solid var(--line); border-radius:4px;
-    padding:16px 16px; margin-bottom:14px;
-  }
-  section.block h2{
-    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
-    color:var(--moss-dark); margin:0 0 14px 0; font-weight:600;
-  }
-
+  .datebar .dateDisplay{font-family:var(--mono); font-size:14px; border:1px solid var(--line); background:var(--card); padding:6px 12px; border-radius:4px; color:var(--ink); cursor:pointer; user-select:none; font-weight:600;}
+  section.block{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:16px 16px; margin-bottom:14px;}
+  section.block h2{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em; color:var(--moss-dark); margin:0 0 14px 0; font-weight:600;}
   .tags{display:flex; flex-wrap:wrap; gap:8px;}
-  .tag{
-    font-family:var(--sans); font-size:13.5px; padding:8px 14px; border-radius:20px;
-    border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--ink);
-    transition:all .12s ease;
-  }
+  .tag{font-family:var(--sans); font-size:13.5px; padding:8px 14px; border-radius:20px; border:1px solid var(--line); background:transparent; cursor:pointer; color:var(--ink); transition:all .12s ease;}
   .tag.on{background:var(--moss); border-color:var(--moss); color:#fff;}
-
   .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   @media(max-width:520px){.grid2{grid-template-columns:1fr; gap:10px;}}
-
   .field{margin-bottom:12px;}
-  .field label{
-    display:block; font-size:12px; color:#6b6656; margin-bottom:6px; font-family:var(--sans); font-weight:500;
-  }
-  
-  .intake-buttons {
-    display: flex; gap: 6px; margin-top: 4px;
-  }
-  .intake-btn {
-    flex: 1; font-family: var(--mono); font-size: 14px; padding: 10px 0;
-    background: transparent; border: 1px solid var(--line); border-radius: 4px;
-    color: var(--ink); cursor: pointer; transition: all 0.1s ease; text-align: center;
-  }
-  .intake-btn.active {
-    background: var(--moss); border-color: var(--moss); color: #fff; font-weight: 600;
-  }
-
+  .field label{display:block; font-size:12px; color:#6b6656; margin-bottom:6px; font-family:var(--sans); font-weight:500;}
+  .intake-buttons {display: flex; gap: 6px; margin-top: 4px;}
+  .intake-btn {flex: 1; font-family: var(--mono); font-size: 14px; padding: 10px 0; background: transparent; border: 1px solid var(--line); border-radius: 4px; color: var(--ink); cursor: pointer; transition: all 0.1s ease; text-align: center;}
+  .intake-btn.active {background: var(--moss); border-color: var(--moss); color: #fff; font-weight: 600;}
   .scale{display:flex; align-items:center; gap:12px;}
   .scale input[type=range]{flex:1; accent-color:var(--clay); height:24px;}
-  .scale .val{
-    font-family:var(--mono); font-size:18px; width:28px; text-align:center; color:var(--clay); font-weight:600;
-  }
-
+  .scale .val{font-family:var(--mono); font-size:18px; width:28px; text-align:center; color:var(--clay); font-weight:600;}
   .healthgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:12px;}
   @media(max-width:520px){.healthgrid{grid-template-columns:1fr; gap:10px;}}
-
-  .healthgrid input[readonly] {
-    background-color: rgba(201, 196, 180, 0.15);
-    border-color: var(--line);
-    color: #555;
-    cursor: not-allowed;
-  }
+  .healthgrid input[readonly] {background-color: rgba(201, 196, 180, 0.15); border-color: var(--line); color: #555; cursor: not-allowed;}
   .healthgrid .num-row { display: flex; align-items: center; gap: 8px; }
-  .healthgrid input[type=number] {
-    width:100%; font-family:var(--mono); font-size:16px; border:1px solid var(--line);
-    background:#fff; padding:10px 12px; border-radius:4px; color:var(--ink);
-  }
-  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {
-    -webkit-appearance: none; margin: 0;
-  }
+  .healthgrid input[type=number] {width:100%; font-family:var(--mono); font-size:16px; border:1px solid var(--line); background:#fff; padding:10px 12px; border-radius:4px; color:var(--ink);}
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button {-webkit-appearance: none; margin: 0;}
   input[type=number] { -moz-appearance: textfield; }
-
   .history{margin-top:26px; overflow-x: auto;}
-  .history h2{
-    font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em;
-    color:var(--moss-dark); margin:0 0 10px 0;
-  }
+  .history h2{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:0.09em; color:var(--moss-dark); margin:0 0 10px 0;}
   table.log{width:100%; border-collapse:collapse; font-size:12.5px; font-family:var(--mono); min-width: 400px;}
-  table.log th, table.log td{
-    text-align:left; padding:8px 6px; border-bottom:1px solid var(--line);
-  }
+  table.log th, table.log td{text-align:left; padding:8px 6px; border-bottom:1px solid var(--line);}
   table.log th{color:#8b8578; font-weight:500; text-transform:uppercase; font-size:10px; letter-spacing:0.05em;}
   table.log tr:hover td{background:rgba(75,93,69,0.05);}
   table.log .rowdate{cursor:pointer; color:var(--moss-dark); font-weight:600;}
   .empty{color:#a39d8c; font-size:13px; font-style:italic; padding:6px 0;}
-  
-  .sync-box {
-    background: var(--card); border: 1px solid var(--line); border-radius: 4px;
-    padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  }
+  .sync-box {background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;}
   @media(max-width:400px){.sync-box{flex-direction: column; align-items: flex-start; gap:8px;}}
   .sync-info { font-family: var(--sans); font-size: 13px; color: var(--ink); }
   .sync-info span { font-family: var(--mono); font-weight: 600; }
   .error-msg { font-family: var(--mono); font-size: 11px; color: var(--clay); margin-top: 4px; font-weight: 600; }
-  .btn-small {
-    background: none; border: 1px solid var(--moss); color: var(--moss);
-    padding: 8px 14px; border-radius: 4px; cursor: pointer; font-family: var(--sans); font-size: 12px; font-weight: 500;
-  }
+  .btn-small {background: none; border: 1px solid var(--moss); color: var(--moss); padding: 8px 14px; border-radius: 4px; cursor: pointer; font-family: var(--sans); font-size: 12px; font-weight: 500;}
   .btn-small:hover { background: var(--moss); color: #fff; }
 </style>
 </head>
@@ -160,7 +64,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.4</a></h1>
+    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.5</a></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -233,12 +137,7 @@
 const HABITS = ["Trene styrke","Trene kardio","Lese","Gå til jobb","PMO","Dagslys/utendørs"];
 const SUPPS = ["Vitamin C","Vitamin D","Tran"];
 const DIET = ["Ultraprosessert mat","Sukker"];
-const SCALES = [
-  {key:"brainfog", label:"Brainfog"},
-  {key:"energi", label:"Energinivå"},
-  {key:"stress", label:"Stressnivå"}
-];
-
+const SCALES = [{key:"brainfog", label:"Brainfog"}, {key:"energi", label:"Energinivå"}, {key:"stress", label:"Stressnivå"}];
 const HEALTH = [
   {key:"steg", unit:"steg", isAuto: true},
   {key:"sovn", unit:"timer", isAuto: true},
@@ -248,7 +147,6 @@ const HEALTH = [
   {key:"co2_snitt", unit:"ppm", isAuto: false},
   {key:"co2_max", unit:"ppm", isAuto: false}
 ];
-
 function getFieldLabel(key) {
   if (key === "steg") return "Steg";
   if (key === "sovn") return "Søvn";
@@ -259,60 +157,21 @@ function getFieldLabel(key) {
   if (key === "co2_max") return "CO2 soverom, maks";
   return key;
 }
-
 const INTAKE_OPTIONS = ["0", "1", "2", "3", "4+"];
-
 const GOOGLE_CLIENT_ID = "924886961527-tt2ogcajaofpdtrf0t61r3tpk72tqhi8.apps.googleusercontent.com";
-const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets " +
-                     "https://www.googleapis.com/auth/fitness.activity.read " +
-                     "https://www.googleapis.com/auth/fitness.body.read " +
-                     "https://www.googleapis.com/auth/fitness.sleep.read";
-
-const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","PMO","Dagslys/utendørs",
-  "Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein",
-  "Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kalorier brukt","Kaloribalanse","CO2 snitt","CO2 maks"];
-
+const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.sleep.read";
+const SHEET_HEADERS = ["Dato","Dag","Trene styrke","Trene kardio","Lese","Gå til jobb","PMO","Dagslys/utendørs","Vitamin C","Vitamin D","Tran","Ultraprosessert mat","Sukker","Alkohol","Koffein","Brainfog","Energi","Stress","Steg","Søvn","HRV","Vekt","Kalorier brukt","Kaloribalanse","CO2 snitt","CO2 maks"];
 const NORSKE_DAGER = ["Søndag","Mandag","Tirsdag","Onsdag","Torsdag","Fredag","Lørdag"];
-function norskDag(dateStr){
-  const d = new Date(dateStr+"T00:00:00");
-  return NORSKE_DAGER[d.getDay()];
-}
-
-let googleAccessToken = null;
-let tokenClient = null;
-let spreadsheetId = null;
-let saveTimeout = null;
-
-const todayStr = new Date().toISOString().slice(0,10);
-let currentDate = todayStr;
-let currentEntry = emptyEntry();
-let weightDateLabel = "";
-
+function norskDag(dateStr){ const d = new Date(dateStr+"T00:00:00"); return NORSKE_DAGER[d.getDay()]; }
+let googleAccessToken = null; let tokenClient = null; let spreadsheetId = null; let saveTimeout = null;
+const todayStr = new Date().toISOString().slice(0,10); let currentDate = todayStr; let currentEntry = emptyEntry(); let weightDateLabel = "";
 let sheetEntries = {};
 
-function emptyEntry(){
-  return { habits:{}, supps:{}, diet:{}, alkohol:"", koffein:"", scales:{brainfog:5, energi:5, stress:5}, health:{} };
-}
-
-function setGoogleStatus(text, isError=false) {
-  const el = document.getElementById("googleStatus");
-  el.textContent = text;
-  el.style.color = isError ? "var(--clay)" : "var(--moss-dark)";
-  if (!isError) document.getElementById("sheetError").style.display = "none";
-}
-
+function emptyEntry(){ return { habits:{}, supps:{}, diet:{}, alkohol:"", koffein:"", scales:{brainfog:5, energi:5, stress:5}, health:{} }; }
+function setGoogleStatus(text, isError=false) { const el = document.getElementById("googleStatus"); el.textContent = text; el.style.color = isError ? "var(--clay)" : "var(--moss-dark)"; if (!isError) document.getElementById("sheetError").style.display = "none"; }
 const KNOWN_SPREADSHEET_ID = "1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc";
-
-function showSheetError(msg) {
-  const el = document.getElementById("sheetError");
-  el.textContent = msg;
-  el.style.display = "block";
-}
-
-function googleScriptLoaded() { 
-  setGoogleStatus("ikke tilkoblet"); 
-  initGoogleAuth(); 
-}
+function showSheetError(msg) { const el = document.getElementById("sheetError"); el.textContent = msg; el.style.display = "block"; }
+function googleScriptLoaded() { setGoogleStatus("ikke tilkoblet"); initGoogleAuth(); }
 
 function initGoogleAuth(){
   if(!window.google || !google.accounts?.oauth2){ return; }
@@ -334,36 +193,23 @@ document.getElementById("googleConnectBtn").onclick = ()=>{ if(!tokenClient){ in
 async function loadSheetEntries() {
   if (!googleAccessToken || !spreadsheetId) return;
   try {
-    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:Z`, {
-      headers: { "Authorization": "Bearer " + googleAccessToken }
-    });
+    const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Logg!A:Z`, { headers: { "Authorization": "Bearer " + googleAccessToken } });
     if (!res.ok) return;
     const data = await res.json();
     const rows = data.values || [];
     if (rows.length <= 1) return;
-    
     sheetEntries = {}; 
-    
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
       const dateStr = r[0];
       if (!dateStr) continue;
-      
       const entry = emptyEntry();
-      const getVal = (headerName) => {
-        const idx = SHEET_HEADERS.indexOf(headerName);
-        return (idx !== -1 && r[idx] !== undefined) ? r[idx] : "";
-      };
-      
+      const getVal = (headerName) => { const idx = SHEET_HEADERS.indexOf(headerName); return (idx !== -1 && r[idx] !== undefined) ? r[idx] : ""; };
       HABITS.forEach(h => { entry.habits[h] = getVal(h) === "1"; });
       SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
       DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
-      
-      const alkVal = getVal("Alkohol");
-      entry.alkohol = alkVal === "4" ? "4+" : alkVal;
-      const koffVal = getVal("Koffein");
-      entry.koffein = koffVal === "4" ? "4+" : koffVal;
-      
+      entry.alkohol = getVal("Alkohol") === "4" ? "4+" : getVal("Alkohol");
+      entry.koffein = getVal("Koffein") === "4" ? "4+" : getVal("Koffein");
       entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
       entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
       entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
@@ -376,16 +222,19 @@ async function loadSheetEntries() {
   } catch (err) { console.error("Klarte ikke hente historikk fra Sheets:", err); }
 }
 
+// RETTET I v2.0.5: Bruker Date.UTC for å eliminere tidssone-krøll
 async function fetchAllHealthData(dateStr, forceOverwrite = false) {
   if (!googleAccessToken) return;
   const targetDateAtCall = dateStr;
+  const [y, m, d] = dateStr.split('-').map(Number);
   
-  const startNano = BigInt(new Date(dateStr + "T00:00:00").getTime()) * 1000000n;
-  const endNano = BigInt(new Date(dateStr + "T23:59:59").getTime()) * 1000000n;
+  const startNano = BigInt(Date.UTC(y, m - 1, d)) * 1000000n;
+  const endNano = BigInt(Date.UTC(y, m - 1, d, 23, 59, 59)) * 1000000n;
   
   const prevDateStr = shiftDate(dateStr, -1);
-  const sleepStartNano = BigInt(new Date(prevDateStr + "T18:00:00").getTime()) * 1000000n;
-  const sleepEndNano = BigInt(new Date(dateStr + "T12:00:00").getTime()) * 1000000n;
+  const [py, pm, pd] = prevDateStr.split('-').map(Number);
+  const sleepStartNano = BigInt(Date.UTC(py, pm - 1, pd, 18, 0, 0)) * 1000000n;
+  const sleepEndNano = BigInt(Date.UTC(y, m - 1, d, 12, 0, 0)) * 1000000n;
   
   const headers = { "Authorization": "Bearer " + googleAccessToken };
   let newHealthData = {}; let found = false;
@@ -408,18 +257,12 @@ async function fetchAllHealthData(dateStr, forceOverwrite = false) {
         if (w > 0) { newHealthData.vekt = Math.round(w * 10) / 10; found = true; weightDateLabel = ""; } 
       } 
     }
-
     if (!newHealthData.vekt) {
       const fallback = findLastRegisteredWeight(dateStr);
       if (fallback) { newHealthData.vekt = fallback.weight; weightDateLabel = fallback.label; found = true; }
     }
-
     if (found && targetDateAtCall === currentDate) {
-      for (const k in newHealthData) {
-        if (newHealthData[k] !== undefined || forceOverwrite) {
-          currentEntry.health[k] = newHealthData[k];
-        }
-      }
+      for (const k in newHealthData) { if (newHealthData[k] !== undefined || forceOverwrite) currentEntry.health[k] = newHealthData[k]; }
       renderHealth();
       await executeSaveDirectly();
     }
@@ -429,13 +272,8 @@ async function fetchAllHealthData(dateStr, forceOverwrite = false) {
 
 function findLastRegisteredWeight(beforeDateStr) {
   const keys = [];
-  // Vi sjekker både lokalt minne og Google Sheets for å finne forrige vekt
-  for(let i=0; i<localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if(k.startsWith("entry:")) keys.push(k);
-  }
+  for(let i=0; i<localStorage.length; i++) { const k = localStorage.key(i); if(k.startsWith("entry:")) keys.push(k); }
   Object.keys(sheetEntries).forEach(d => keys.push("entry:" + d));
-  
   const uniqueKeys = Array.from(new Set(keys)).sort().reverse();
   for(const k of uniqueKeys) {
     const date = k.replace("entry:", "");
@@ -444,7 +282,6 @@ function findLastRegisteredWeight(beforeDateStr) {
       const stored = localStorage.getItem(k);
       if(stored) e = JSON.parse(stored);
       if(!e && sheetEntries[date]) e = sheetEntries[date];
-      
       if (e?.health?.vekt) {
         const [_, m, d] = date.split("-");
         return { weight: e.health.vekt, label: ` (${d}.${m})` };
@@ -546,45 +383,19 @@ async function executeSaveDirectly(){
 
 async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "laster…"; weightDateLabel = "";
-  
-  if (googleAccessToken && spreadsheetId) {
-    await loadSheetEntries();
-  }
-  
-  let localData = null; 
-  const stored = localStorage.getItem("entry:" + dateStr); 
-  if(stored) localData = JSON.parse(stored);
-  
+  if (googleAccessToken && spreadsheetId) { await loadSheetEntries(); }
+  let localData = null; const stored = localStorage.getItem("entry:" + dateStr); if(stored) localData = JSON.parse(stored);
   let sheetData = sheetEntries[dateStr] || null;
+  if (sheetData) { currentEntry = sheetData; localStorage.setItem("entry:" + dateStr, JSON.stringify(sheetData)); document.getElementById("saveStatus").textContent = "synkronisert"; } 
+  else if (localData) { currentEntry = localData; document.getElementById("saveStatus").textContent = "synkronisert (lokal)"; } 
+  else { currentEntry = emptyEntry(); document.getElementById("saveStatus").textContent = "klar"; }
   
-  if (sheetData) {
-    currentEntry = sheetData;
-    localStorage.setItem("entry:" + dateStr, JSON.stringify(sheetData));
-    document.getElementById("saveStatus").textContent = "synkronisert";
-  } else if (localData) {
-    currentEntry = localData;
-    document.getElementById("saveStatus").textContent = "synkronisert (lokal)";
-  } else {
-    currentEntry = emptyEntry();
-    document.getElementById("saveStatus").textContent = "klar";
-  }
-  
-  // RETTET I v2.0.4: Hvis vi henter en fallback-vekt, lagrer vi den nå *faktisk* inn i currentEntry
-  // slik at den blir eksportert og lagret i Google Sheets også på dager du ikke veier deg!
   if (!currentEntry.health.vekt || weightDateLabel === "") {
     const fallback = findLastRegisteredWeight(dateStr);
-    if (fallback && !currentEntry.health.vekt) {
-      currentEntry.health.vekt = fallback.weight;
-      weightDateLabel = fallback.label;
-    }
+    if (fallback && !currentEntry.health.vekt) { currentEntry.health.vekt = fallback.weight; weightDateLabel = fallback.label; }
   }
-  
-  renderAll();
-  renderHistory();
-  
-  if (!sheetData && googleAccessToken) {
-    await fetchAllHealthData(dateStr);
-  }
+  renderAll(); renderHistory();
+  if (!sheetData && googleAccessToken) { await fetchAllHealthData(dateStr); }
 }
 
 async function handleDateChange(newDate) {
@@ -597,19 +408,12 @@ function renderHistory(){
   const el = document.getElementById("historyTable"); const keys = [];
   for(let i=0; i<localStorage.length; i++) { const k = localStorage.key(i); if(k.startsWith("entry:")) keys.push(k); }
   Object.keys(sheetEntries).forEach(d => keys.push("entry:" + d));
-  
   const uniqueKeys = Array.from(new Set(keys)).sort().reverse();
   if(uniqueKeys.length === 0){ el.innerHTML = '<div class="empty">Ingen oppføringer ennå.</div>'; return; }
-  
   const rows = [];
   for(const k of uniqueKeys.slice(0,10)){
     const date = k.replace("entry:","");
-    let e = null;
-    const stored = localStorage.getItem("entry:" + date);
-    if(stored) e = JSON.parse(stored);
-    if(!e && sheetEntries[date]) e = sheetEntries[date];
-    if(!e) e = emptyEntry();
-    
+    let e = null; const stored = localStorage.getItem("entry:" + date); if(stored) e = JSON.parse(stored); if(!e && sheetEntries[date]) e = sheetEntries[date]; if(!e) e = emptyEntry();
     rows.push(`<tr><td class="rowdate" data-date="${date}">${date}</td><td>${Object.values(e.habits||{}).filter(Boolean).length}/${HABITS.length}</td><td>${e.scales?.brainfog ?? "–"}</td><td>${e.health?.co2_snitt || "–"}</td></tr>`);
   }
   el.innerHTML = `<table class="log"><thead><tr><th>Dato</th><th>Vaner</th><th>Brainfog</th><th>CO2 snitt</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
@@ -617,10 +421,7 @@ function renderHistory(){
 }
 
 function pad(n){return n<10?'0'+n:n;}
-function shiftDate(dateStr, delta){
-  const d = new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+delta);
-  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
-}
+function shiftDate(dateStr, delta){ const d = new Date(dateStr+"T00:00:00"); d.setDate(d.getDate()+delta); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
 function formatNorwegian(dateStr){ const [y,m,d] = dateStr.split("-"); return `${d}.${m}.${y}`; }
 function updateDateDisplay(){ document.getElementById("dateDisplay").textContent = formatNorwegian(currentDate); document.getElementById("nextDay").disabled = (currentDate >= todayStr); }
 
@@ -628,11 +429,7 @@ document.getElementById("dateInput").value = currentDate; updateDateDisplay();
 document.getElementById("dateInput").onchange = async (e)=>{ if(e.target.value > todayStr) { e.target.value = currentDate; return; } await handleDateChange(e.target.value); };
 document.getElementById("prevDay").onclick = async ()=>{ await handleDateChange(shiftDate(currentDate, -1)); };
 document.getElementById("nextDay").onclick = async ()=>{ if(currentDate < todayStr) await handleDateChange(shiftDate(currentDate, 1)); };
-
-document.getElementById("fetchHealthBtn").onclick = async () => {
-  document.getElementById("saveStatus").textContent = "tvinger henting…";
-  await fetchAllHealthData(currentDate, true);
-};
+document.getElementById("fetchHealthBtn").onclick = async () => { document.getElementById("saveStatus").textContent = "tvinger henting…"; await fetchAllHealthData(currentDate, true); };
 
 loadEntry(currentDate); renderHistory();
 </script>
