@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Feltjournal v2.0.6</title>
+<title>Feltjournal v2.0.7</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -127,7 +127,6 @@
   }
   input[type=number] { -moz-appearance: textfield; }
 
-  /* ENDRET I v2.0.6: Styling for pluss/minus-veksleren */
   .sign-toggle-btn {
     background: none; border: 1px solid var(--line); border-radius: 4px;
     font-family: var(--mono); font-size: 14px; font-weight: bold; width: 44px; height: 41px;
@@ -174,7 +173,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.6</a></h1>
+    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.7</a></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -460,7 +459,6 @@ function renderScales(){
   });
 }
 
-// ENDRET I v2.0.6: Lagt til interaktiv +/- veksler for Kaloribalanse
 function renderHealth(){
   const c = document.getElementById("healthFields"); c.innerHTML = "";
   HEALTH.forEach(h=>{
@@ -469,7 +467,6 @@ function renderHealth(){
     const readonlyAttr = h.isAuto ? "readonly" : "";
     
     if (h.key === "kal_balanse") {
-      // Kaloribalanse får en spesiell pluss/minus-knapp ved siden av feltet
       const val = currentEntry.health[h.key] ?? "";
       const isMinus = typeof val === "number" && val < 0;
       const displayVal = val !== "" ? Math.abs(val) : "";
@@ -491,7 +488,6 @@ function renderHealth(){
       const input = f.querySelector("input");
       const btn = f.querySelector("#balSignBtn");
       
-      // Når vi taster inn siffer
       input.oninput = ()=>{
         const parsedAbs = input.value !== "" ? Math.abs(Number(input.value)) : "";
         if (parsedAbs === "") {
@@ -506,7 +502,6 @@ function renderHealth(){
         triggerDebouncedSave();
       };
 
-      // Når vi trykker på +/- knappen
       btn.onclick = ()=>{
         const parsedAbs = input.value !== "" ? Math.abs(Number(input.value)) : "";
         if (btn.textContent === "+") {
@@ -522,7 +517,6 @@ function renderHealth(){
       };
 
     } else {
-      // Standard input for de andre feltene
       f.innerHTML = `<label>${displayLabel}</label><div class="num-row"><input type="number" step="any" ${readonlyAttr} value="${currentEntry.health[h.key] ?? ''}"><span class="unit">${h.unit}</span></div>`;
       const input = f.querySelector("input"); 
       if (!h.isAuto) { 
@@ -570,8 +564,18 @@ async function loadEntry(dateStr) {
   if (!sheetData && googleAccessToken) { await fetchAllHealthData(dateStr); }
 }
 
+// ENDRET I v2.0.7: Ny og 100% sikker synkronisering ved dagsbytte
 async function handleDateChange(newDate) {
-  clearTimeout(saveTimeout); document.getElementById("saveStatus").textContent = "lagrer…"; await executeSaveDirectly();
+  // 1. Stopp og slett tidsinnstilt lagring fra forrige dag umiddelbart
+  clearTimeout(saveTimeout);
+  
+  // 2. Hvis det var ulagrede endringer, lagre dem med ÉN gang før vi bytter side
+  if (document.getElementById("saveStatus").textContent === "endret…") {
+    document.getElementById("saveStatus").textContent = "lagrer…";
+    await executeSaveDirectly();
+  }
+  
+  // 3. Gjør dagsbyttet sikkert
   currentDate = newDate; document.getElementById("dateInput").value = currentDate; updateDateDisplay();
   await loadEntry(currentDate); renderHistory();
 }
