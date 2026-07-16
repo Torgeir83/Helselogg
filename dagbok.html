@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Feltjournal v2.0.7</title>
+<title>Feltjournal v2.0.9</title>
 <style>
   :root{
     --paper: #EFEDE6;
@@ -173,7 +173,7 @@
 <div class="wrap">
 
   <header class="top">
-    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.7</a></h1>
+    <h1>Feltjournal<a href="https://docs.google.com/spreadsheets/d/1uFnrJx3lMMOzJLPY3oFjf8Kyi8WzssVumjs4ntudIAc/edit" target="_blank" class="sheet-link">v2.0.9</a></h1>
     <div class="sub">helse · vaner · sensor</div>
   </header>
 
@@ -315,7 +315,13 @@ async function loadSheetEntries() {
       const dateStr = r[0];
       if (!dateStr) continue;
       const entry = emptyEntry();
-      const getVal = (headerName) => { const idx = SHEET_HEADERS.indexOf(headerName); return (idx !== -1 && r[idx] !== undefined) ? r[idx] : ""; };
+      const getVal = (headerName) => { 
+        const idx = SHEET_HEADERS.indexOf(headerName); 
+        let rawVal = (idx !== -1 && r[idx] !== undefined) ? r[idx] : "";
+        if (typeof rawVal === "string") return rawVal.trim();
+        return rawVal;
+      };
+      
       HABITS.forEach(h => { entry.habits[h] = getVal(h) === "1"; });
       SUPPS.forEach(s => { entry.supps[s] = getVal(s) === "1"; });
       DIET.forEach(d => { entry.diet[d] = getVal(d) === "1"; });
@@ -324,9 +330,18 @@ async function loadSheetEntries() {
       entry.scales.brainfog = parseInt(getVal("Brainfog"), 10) || 5;
       entry.scales.energi = parseInt(getVal("Energi"), 10) || 5;
       entry.scales.stress = parseInt(getVal("Stress"), 10) || 5;
+      
       HEALTH.forEach(h => {
         const sheetName = h.key === "kal_brukt" ? "Kalorier brukt" : (h.key === "kal_balanse" ? "Kaloribalanse" : (h.key === "co2_snitt" ? "CO2 snitt" : (h.key === "co2_max" ? "CO2 maks" : getFieldLabel(h.key))));
-        const v = getVal(sheetName); entry.health[h.key] = v !== "" ? Number(v) : "";
+        let raw = getVal(sheetName);
+        if (raw !== "") {
+          if (typeof raw === "string") {
+            raw = raw.replace(",", ".").replace("−", "-");
+          }
+          entry.health[h.key] = Number(raw);
+        } else {
+          entry.health[h.key] = "";
+        }
       });
       sheetEntries[dateStr] = entry;
     }
@@ -415,7 +430,7 @@ function entryToRow(dateStr, entry){
   row[SHEET_HEADERS.indexOf("Stress")] = entry.scales.stress ?? "";
   HEALTH.forEach(h => { 
     const sheetName = h.key === "kal_brukt" ? "Kalorier brukt" : (h.key === "kal_balanse" ? "Kaloribalanse" : (h.key === "co2_snitt" ? "CO2 snitt" : (h.key === "co2_max" ? "CO2 maks" : getFieldLabel(h.key))));
-    row[SHEET_HEADERS.indexOf(sheetName)] = entry.health[h.key] || ""; 
+    row[SHEET_HEADERS.indexOf(sheetName)] = entry.health[h.key] !== "" ? String(entry.health[h.key]).replace(".", ",") : ""; 
   });
   return row;
 }
@@ -547,35 +562,61 @@ async function executeSaveDirectly(){
   if (snapshotDate === currentDate) { document.getElementById("saveStatus").textContent = "lagret"; renderHistory(); }
 }
 
+// ENDRET I v2.0.9: Last inn dagen sikkert, og kjør umiddelbar helsedata-henting i bakgrunnen
 async function loadEntry(dateStr) {
   document.getElementById("saveStatus").textContent = "laster…"; weightDateLabel = "";
-  if (googleAccessToken && spreadsheetId) { await loadSheetEntries(); }
-  let localData = null; const stored = localStorage.getItem("entry:" + dateStr); if(stored) localData = JSON.parse(stored);
+  
+  if (googleAccessToken && spreadsheetId) { 
+    await loadSheetEntries(); 
+  }
+  
   let sheetData = sheetEntries[dateStr] || null;
-  if (sheetData) { currentEntry = sheetData; localStorage.setItem("entry:" + dateStr, JSON.stringify(sheetData)); document.getElementById("saveStatus").textContent = "synkronisert"; } 
-  else if (localData) { currentEntry = localData; document.getElementById("saveStatus").textContent = "synkronisert (lokal)"; } 
-  else { currentEntry = emptyEntry(); document.getElementById("saveStatus").textContent = "klar"; }
+  let localData = null; 
+  const stored = localStorage.getItem("entry:" + dateStr); 
+  if(stored) localData = JSON.parse(stored);
+  
+  if (googleAccessToken && spreadsheetId) {
+    if (sheetData) {
+      currentEntry = sheetData;
+      localStorage.setItem("entry:" + dateStr, JSON.stringify(sheetData));
+      document.getElementById("saveStatus").textContent = "synkronisert";
+    } else {
+      currentEntry = emptyEntry();
+      localStorage.setItem("entry:" + dateStr, JSON.stringify(currentEntry));
+      document.getElementById("saveStatus").textContent = "klar (tom dag i skyen)";
+    }
+  } else {
+    if (localData) {
+      currentEntry = localData;
+      document.getElementById("saveStatus").textContent = "synkronisert (lokal)";
+    } else {
+      currentEntry = emptyEntry();
+      document.getElementById("saveStatus").textContent = "klar";
+    }
+  }
   
   if (!currentEntry.health.vekt || weightDateLabel === "") {
     const fallback = findLastRegisteredWeight(dateStr);
     if (fallback && !currentEntry.health.vekt) { currentEntry.health.vekt = fallback.weight; weightDateLabel = fallback.label; }
   }
-  renderAll(); renderHistory();
-  if (!sheetData && googleAccessToken) { await fetchAllHealthData(dateStr); }
+  
+  renderAll(); 
+  renderHistory();
+  
+  // NYTT I v2.0.9: Hvis Google Fit er tilkoblet, henter vi ALLTID de aller ferskeste helsedataene
+  // i bakgrunnen med en gang du går inn på en dag. Dette sikrer at skritt og kalorier teller oppover
+  // utover dagen, og ikke låser seg til verdien du hadde i morges!
+  if (googleAccessToken) { 
+    await fetchAllHealthData(dateStr); 
+  }
 }
 
-// ENDRET I v2.0.7: Ny og 100% sikker synkronisering ved dagsbytte
 async function handleDateChange(newDate) {
-  // 1. Stopp og slett tidsinnstilt lagring fra forrige dag umiddelbart
   clearTimeout(saveTimeout);
-  
-  // 2. Hvis det var ulagrede endringer, lagre dem med ÉN gang før vi bytter side
   if (document.getElementById("saveStatus").textContent === "endret…") {
     document.getElementById("saveStatus").textContent = "lagrer…";
     await executeSaveDirectly();
   }
-  
-  // 3. Gjør dagsbyttet sikkert
   currentDate = newDate; document.getElementById("dateInput").value = currentDate; updateDateDisplay();
   await loadEntry(currentDate); renderHistory();
 }
